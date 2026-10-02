@@ -1,118 +1,230 @@
-const clients = new Set();
+const MAX_LOGS = 200;
 
 const logs = [];
 
-const MAX_LOGS = 200;
+const subscribers = new Set();
+
+/*
+
+============================
+
+添加日志
+
+============================
+*/
 
 function addLog(
-  message,
-  level = "info"
+message,
+level = "info"
 ) {
-  const log = {
-    time: new Date().toISOString(),
-    level,
-    message
-  };
 
-  logs.push(log);
+const log = {
+time:
+new Date().toISOString(),
 
-  if (logs.length > MAX_LOGS) {
-    logs.shift();
-  }
+level,
 
-  const data =
-    `data: ${JSON.stringify(log)}\n\n`;
+message:
+  String(message)
 
-  for (const client of clients) {
-    try {
-      client.write(data);
-    } catch (error) {
-      clients.delete(client);
-    }
-  }
 
-  console.log(
-    `[${level.toUpperCase()}] ${message}`
-  );
+};
 
-  return log;
+/*
+
+保存到内存
+*/
+logs.push(log);
+
+/*
+
+限制日志数量
+
+只保留最近 MAX_LOGS 条
+*/
+if (
+logs.length > MAX_LOGS
+) {
+
+logs.splice(
+  0,
+  logs.length - MAX_LOGS
+);
+
+
 }
 
-function subscribe(response) {
+/*
 
-  response.setHeader(
-    "Content-Type",
-    "text/event-stream"
+输出到 Render 控制台
+*/
+const prefix =
+level === "error"
+? "[ERROR]"
+: "[INFO]";
+
+console.log(
+${prefix} ${log.message}
+);
+
+/*
+
+推送给网页端
+*/
+for (
+const res of subscribers
+) {
+
+try {
+
+  res.write(
+    `data: ${JSON.stringify(log)}\n\n`
   );
 
-  response.setHeader(
-    "Cache-Control",
-    "no-cache"
+} catch (error) {
+
+  subscribers.delete(
+    res
   );
 
-  response.setHeader(
-    "Connection",
-    "keep-alive"
-  );
-
-  if (response.flushHeaders) {
-    response.flushHeaders();
-  }
-
-  clients.add(response);
-
-  // 把已经存在的日志发送给刚连接的浏览器
-  for (const log of logs) {
-
-    response.write(
-      `data: ${JSON.stringify(log)}\n\n`
-    );
-
-  }
-
-  // 每 15 秒发送一次心跳
-  // 防止某些代理服务器关闭长连接
-  const heartbeat =
-    setInterval(() => {
-
-      try {
-
-        response.write(
-          ": heartbeat\n\n"
-        );
-
-      } catch (error) {
-
-        clearInterval(
-          heartbeat
-        );
-
-      }
-
-    }, 15000);
-
-  response.on(
-    "close",
-    () => {
-
-      clearInterval(
-        heartbeat
-      );
-
-      clients.delete(
-        response
-      );
-
-    }
-  );
 }
+
+
+}
+
+}
+
+/*
+
+============================
+
+获取历史日志
+
+============================
+*/
 
 function getLogs() {
-  return [...logs];
+
+return [
+...logs
+];
+
 }
 
+/*
+
+============================
+
+SSE 实时订阅
+
+============================
+*/
+
+function subscribe(res) {
+
+/*
+
+SSE Headers
+*/
+res.writeHead(
+200,
+{
+"Content-Type":
+"text/event-stream",
+
+"Cache-Control":
+"no-cache",
+
+"Connection":
+"keep-alive",
+
+"X-Accel-Buffering":
+"no"
+}
+);
+
+/*
+
+立即发送当前历史日志
+*/
+res.write(
+data: ${JSON.stringify({ type: "history", logs: getLogs() })}\n\n
+);
+
+/*
+
+加入订阅列表
+*/
+subscribers.add(
+res
+);
+
+/*
+
+保持连接
+*/
+const heartbeat =
+setInterval(
+() => {
+
+try {
+
+ res.write(
+   ": heartbeat\n\n"
+ );
+
+
+} catch (error) {
+
+ clearInterval(
+   heartbeat
+ );
+
+ subscribers.delete(
+   res
+ );
+
+
+}
+
+},
+15000
+);
+
+/*
+
+浏览器关闭连接
+*/
+res.on(
+"close",
+() => {
+
+clearInterval(
+heartbeat
+);
+
+subscribers.delete(
+res
+);
+
+}
+
+
+);
+
+}
+
+/*
+
+============================
+
+导出
+
+============================
+*/
+
 module.exports = {
-  addLog,
-  subscribe,
-  getLogs
+addLog,
+getLogs,
+subscribe
 };
