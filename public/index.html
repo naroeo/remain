@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
+
   <meta charset="UTF-8">
 
   <meta
@@ -14,41 +16,41 @@
     rel="stylesheet"
     href="/style.css"
   >
+
 </head>
+
 
 <body>
 
-  <!-- =========================
+  <!-- ============================
        登录页面
-       ========================= -->
+       ============================ -->
 
   <div
     id="login-page"
-    class="login-page"
+    class="page login-page"
   >
+
     <div class="login-card">
 
-      <div class="login-header">
-        <h1>Remain</h1>
+      <h1>Remain</h1>
 
-        <p>
-          请输入管理密码
-        </p>
-      </div>
+      <p class="login-subtitle">
+        管理员登录
+      </p>
 
       <form id="login-form">
 
         <div class="form-group">
 
           <label for="login-password">
-            密码
+            管理员密码
           </label>
 
           <input
             id="login-password"
             type="password"
             autocomplete="current-password"
-            placeholder="请输入密码"
             required
           >
 
@@ -56,49 +58,46 @@
 
         <button
           type="submit"
-          class="login-button"
+          class="primary-button"
         >
           登录
         </button>
 
         <div
           id="login-error"
-          class="login-error"
+          class="form-error"
         ></div>
 
       </form>
 
     </div>
+
   </div>
 
 
-  <!-- =========================
-       主应用
-       ========================= -->
+  <!-- ============================
+       主页面
+       ============================ -->
 
   <div
     id="app-page"
-    class="app-page hidden"
+    class="page app-page hidden"
   >
 
-    <!-- Header -->
+    <header class="topbar">
 
-    <header class="app-header">
+      <div class="topbar-left">
 
-      <div class="header-inner">
+        <h1>Remain</h1>
 
-        <div>
-          <h1>Remain</h1>
+      </div>
 
-          <p class="header-subtitle">
-            定时访问任务管理
-          </p>
-        </div>
+      <div class="topbar-right">
 
         <button
           id="logout-button"
-          type="button"
           class="secondary-button"
+          type="button"
         >
           退出登录
         </button>
@@ -108,76 +107,68 @@
     </header>
 
 
-    <!-- Main -->
-
-    <main class="container">
+    <main class="main-container">
 
 
-      <!-- =========================
+      <!-- ============================
            创建任务
-           ========================= -->
+           ============================ -->
 
       <section class="panel">
 
         <div class="panel-header">
 
           <div>
+
             <h2>
               创建任务
             </h2>
 
-            <p class="panel-description">
-              创建一个新的定时访问任务
+            <p>
+              设置网站访问任务
             </p>
+
           </div>
 
         </div>
 
 
-        <form id="task-form">
+        <form id="create-task-form">
 
-          <!-- 任务名称 -->
-
-          <div class="form-group">
-
-            <label for="task-name">
-              任务名称
-            </label>
-
-            <input
-              id="task-name"
-              name="name"
-              type="text"
-              maxlength="100"
-              placeholder="例如：Google"
-              required
-            >
-
-          </div>
+          <div class="form-grid">
 
 
-          <!-- URL -->
+            <div class="form-group">
 
-          <div class="form-group">
+              <label for="task-name">
+                任务名称
+              </label>
 
-            <label for="task-url">
-              访问 URL
-            </label>
+              <input
+                id="task-name"
+                type="text"
+                placeholder="例如：每日网站访问"
+                required
+              >
 
-            <input
-              id="task-url"
-              name="url"
-              type="url"
-              placeholder="https://example.com"
-              required
-            >
-
-          </div>
+            </div>
 
 
-          <!-- 执行参数 -->
+            <div class="form-group">
 
-          <div class="form-row">
+              <label for="task-url">
+                目标网址
+              </label>
+
+              <input
+                id="task-url"
+                type="url"
+                placeholder="https://example.com"
+                required
+              >
+
+            </div>
+
 
             <div class="form-group">
 
@@ -187,7 +178,6 @@
 
               <input
                 id="task-interval"
-                name="interval_minutes"
                 type="number"
                 min="1"
                 step="1"
@@ -201,12 +191,11 @@
             <div class="form-group">
 
               <label for="task-stay">
-                页面停留（秒）
+                停留时间（秒）
               </label>
 
               <input
                 id="task-stay"
-                name="stay_seconds"
                 type="number"
                 min="0"
                 step="1"
@@ -230,29 +219,34 @@
 
           </div>
 
+
+          <div
+            id="create-task-message"
+            class="form-message"
+          ></div>
+
         </form>
 
       </section>
 
 
 
-      <!-- =========================
+      <!-- ============================
            任务列表
-           ========================= -->
+           ============================ -->
 
       <section class="panel">
 
-        <div class="panel-header">
+        <div class="panel-header task-list-header">
 
           <div>
+
             <h2 id="tasks-title">
               任务列表（共 0 个任务）
             </h2>
 
-            <p class="panel-description">
-              管理当前所有定时访问任务
-            </p>
           </div>
+
 
           <button
             id="refresh-tasks-button"
@@ -268,34 +262,43 @@
         <div
           id="tasks-container"
           class="tasks-container"
-        ></div>
+        >
+
+          <div class="empty-state">
+            暂无任务
+          </div>
+
+        </div>
 
       </section>
 
 
 
-      <!-- =========================
+      <!-- ============================
            日志
-           ========================= -->
+           ============================ -->
 
       <section class="panel">
 
         <div class="panel-header">
 
           <div>
+
             <h2>
               运行日志
             </h2>
 
-            <p class="panel-description">
-              实时查看任务执行情况
+            <p>
+              最多保留 200 条日志
             </p>
+
           </div>
+
 
           <button
             id="clear-logs-button"
             type="button"
-            class="secondary-button danger-button"
+            class="secondary-button"
           >
             清空日志
           </button>
@@ -306,7 +309,13 @@
         <div
           id="logs-container"
           class="logs-container"
-        ></div>
+        >
+
+          <div class="empty-state">
+            暂无日志
+          </div>
+
+        </div>
 
       </section>
 
@@ -316,9 +325,9 @@
 
 
 
-  <!-- =========================
+  <!-- ============================
        编辑任务弹窗
-       ========================= -->
+       ============================ -->
 
   <div
     id="edit-task-modal"
@@ -326,31 +335,27 @@
   >
 
     <div
-      class="modal-backdrop"
       id="edit-modal-backdrop"
+      class="modal-backdrop"
     ></div>
 
 
-    <div
-      class="modal-card"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="edit-task-title"
-    >
+    <div class="modal-dialog">
 
       <div class="modal-header">
 
         <div>
 
-          <h2 id="edit-task-title">
+          <h2>
             编辑任务
           </h2>
 
-          <p class="panel-description">
-            修改任务设置不会改变任务 ID
+          <p>
+            修改任务设置，不会改变任务 ID
           </p>
 
         </div>
+
 
         <button
           id="close-edit-task-button"
@@ -372,8 +377,6 @@
         >
 
 
-        <!-- 任务名称 -->
-
         <div class="form-group">
 
           <label for="edit-task-name">
@@ -383,73 +386,68 @@
           <input
             id="edit-task-name"
             type="text"
-            maxlength="100"
-            placeholder="请输入任务名称"
             required
           >
 
         </div>
 
 
-        <!-- URL -->
-
         <div class="form-group">
 
           <label for="edit-task-url">
-            访问 URL
+            目标网址
           </label>
 
           <input
             id="edit-task-url"
             type="url"
-            placeholder="https://example.com"
             required
           >
 
         </div>
 
 
-        <!-- 执行参数 -->
+        <div class="form-group">
 
-        <div class="form-row">
+          <label for="edit-task-interval">
+            执行间隔（分钟）
+          </label>
 
-          <div class="form-group">
-
-            <label for="edit-task-interval">
-              执行间隔（分钟）
-            </label>
-
-            <input
-              id="edit-task-interval"
-              type="number"
-              min="1"
-              step="1"
-              required
-            >
-
-          </div>
-
-
-          <div class="form-group">
-
-            <label for="edit-task-stay">
-              页面停留（秒）
-            </label>
-
-            <input
-              id="edit-task-stay"
-              type="number"
-              min="0"
-              step="1"
-              required
-            >
-
-          </div>
+          <input
+            id="edit-task-interval"
+            type="number"
+            min="1"
+            step="1"
+            required
+          >
 
         </div>
 
 
-        <div class="form-actions modal-actions">
+        <div class="form-group">
+
+          <label for="edit-task-stay">
+            停留时间（秒）
+          </label>
+
+          <input
+            id="edit-task-stay"
+            type="number"
+            min="0"
+            step="1"
+            required
+          >
+
+        </div>
+
+
+        <div
+          id="edit-task-message"
+          class="form-message"
+        ></div>
+
+
+        <div class="modal-actions">
 
           <button
             id="cancel-edit-task-button"
@@ -458,6 +456,7 @@
           >
             取消
           </button>
+
 
           <button
             type="submit"
@@ -475,7 +474,9 @@
   </div>
 
 
+
   <script src="/app.js"></script>
 
 </body>
+
 </html>
