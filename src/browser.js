@@ -1,7 +1,7 @@
 const { chromium } = require("playwright");
-const { spawn } = require("child_process");
+const { spawn, execFileSync } = require("child_process");
 const fs = require("fs");
-const path = require("path");
+
 const { addLog } = require("./logger");
 
 let browser = null;
@@ -11,9 +11,14 @@ let xvfb = null;
 let fluxbox = null;
 let display = null;
 
+
+/* =========================================================
+   检查系统命令
+   ========================================================= */
+
 function commandExists(command) {
   try {
-    require("child_process").execFileSync(
+    execFileSync(
       "which",
       [command],
       {
@@ -27,22 +32,71 @@ function commandExists(command) {
   }
 }
 
-async function ensureDisplay() {
-  if (process.env.DISPLAY) {
-    display = process.env.DISPLAY;
+
+/* =========================================================
+   检查 DISPLAY 是否真的可用
+   ========================================================= */
+
+function displayIsAvailable(displayName) {
+  if (!displayName) {
+    return false;
+  }
+
+  if (!commandExists("xdpyinfo")) {
+    return false;
+  }
+
+  try {
+    execFileSync(
+      "xdpyinfo",
+      ["-display", displayName],
+      {
+        stdio: "ignore",
+        timeout: 3000
+      }
+    );
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+
+/* =========================================================
+   启动 Xvfb
+   ========================================================= */
+
+async function startXvfb() {
+  if (!commandExists("Xvfb")) {
+    throw new Error(
+      "系统未安装 Xvfb"
+    );
+  }
+
+  /*
+   * Render 环境中使用 :99。
+   */
+  const displayNumber = 99;
+
+  display = `:${displayNumber}`;
+
+  /*
+   * 如果 :99 已经被占用，先尝试使用。
+   */
+  if (displayIsAvailable(display)) {
+    process.env.DISPLAY = display;
+
+    console.log(
+      `[Browser] 使用已有 X Server：${display}`
+    );
+
     return;
   }
 
-  if (!commandExists("Xvfb")) {
-    throw new Error("系统未安装 Xvfb");
-  }
-
-  if (!commandExists("fluxbox")) {
-    throw new Error("系统未安装 fluxbox");
-  }
-
-  const displayNumber = 99;
-  display = `:${displayNumber}`;
+  console.log(
+    `[Browser] 正在启动 Xvfb：${display}`
+  );
 
   xvfb = spawn(
     "Xvfb",
@@ -51,27 +105,126 @@ async function ensureDisplay() {
       "-screen",
       "0",
       "1920x1080x24",
-      "-ac"
+      "-ac",
+      "-nolisten",
+      "tcp"
     ],
     {
       detached: false,
-      stdio: "ignore"
+      stdio: [
+        "ignore",
+        "ignore",
+        "pipe"
+      ]
     }
   );
 
-  await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      resolve();
-    }, 1000);
+  let xvfbError = "";
 
-    xvfb.once("error", error => {
-      clearTimeout(timer);
-      reject(error);
-    });
-  });
+  if (xvfb.stderr) {
+    xvfb.stderr.on(
+      "data",
+      chunk => {
+        xvfbError += chunk.toString();
+      }
+    );
+  }
+
+  await new Promise(
+    (resolve, reject) => {
+      let finished = false;
+
+      const timer =
+        setTimeout(
+          () => {
+            if (!finished) {
+              finished = true;
+              resolve();
+            }
+          },
+          1500
+        );
+
+      xvfb.once(
+        "error",
+        error => {
+          if (finished) {
+            return;
+          }
+
+          finished = true;
+
+          clearTimeout(timer);
+
+          reject(error);
+        }
+      );
+
+      xvfb.once(
+        "exit",
+        code => {
+          if (finished) {
+            return;
+          }
+
+          /*
+           * Xvfb 很快退出说明启动失败。
+           */
+          if (code !== null && code !== 0) {
+            finished = true;
+
+            clearTimeout(timer);
+
+            reject(
+              new Error(
+                `Xvfb 启动失败，退出码 ${code}` +
+                (
+                  xvfbError
+                    ? `：${xvfbError.trim()}`
+                    : ""
+                )
+              )
+            );
+          }
+        }
+      );
+    }
+  );
 
   process.env.DISPLAY = display;
 
+  /*
+   * 再确认一次 X Server。
+   */
+  if (!displayIsAvailable(display)) {
+    throw new Error(
+      `Xvfb 已启动，但 DISPLAY ${display} 不可用`
+    );
+  }
+
+  console.log(
+    `[Browser] Xvfb 启动成功：${display}`
+  );
+}
+
+
+/* =========================================================
+   启动 Fluxbox
+   ========================================================= */
+
+async function startFluxbox() {
+  if (!commandExists("fluxbox")) {
+    console.log(
+      "[Browser] 未找到 fluxbox，继续运行"
+    );
+
+    return;
+  }
+
+  /*
+   * Fluxbox 只是提供窗口管理器，
+   * Playwright 本身并不依赖它才能访问网页。
+   */
   fluxbox = spawn(
     "fluxbox",
     [],
@@ -80,7 +233,69 @@ async function ensureDisplay() {
       stdio: "ignore"
     }
   );
+
+  await new Promise(
+    resolve => {
+      setTimeout(
+        resolve,
+        500
+      );
+    }
+  );
+
+  console.log(
+    "[Browser] Fluxbox 启动成功"
+  );
 }
+
+
+/* =========================================================
+   确保显示环境
+   ========================================================= */
+
+async function ensureDisplay() {
+  /*
+   * 不再单纯相信 process.env.DISPLAY。
+   *
+   * 必须确认这个 DISPLAY 背后真的有 X Server。
+   */
+  if (
+    process.env.DISPLAY &&
+    displayIsAvailable(
+      process.env.DISPLAY
+    )
+  ) {
+    display =
+      process.env.DISPLAY;
+
+    console.log(
+      `[Browser] 使用现有 DISPLAY：${display}`
+    );
+
+    return;
+  }
+
+  /*
+   * 如果 DISPLAY 存在但 X Server 不存在，
+   * 清掉它，避免 Chromium 继续使用坏的 DISPLAY。
+   */
+  if (process.env.DISPLAY) {
+    console.log(
+      `[Browser] DISPLAY ${process.env.DISPLAY} 不可用，启动 Xvfb`
+    );
+
+    delete process.env.DISPLAY;
+  }
+
+  await startXvfb();
+
+  await startFluxbox();
+}
+
+
+/* =========================================================
+   确保浏览器
+   ========================================================= */
 
 async function ensureBrowser() {
   if (browser && context) {
@@ -93,47 +308,74 @@ async function ensureBrowser() {
     process.env.PLAYWRIGHT_USER_DATA_DIR ||
     "/tmp/remain-playwright";
 
-  fs.mkdirSync(userDataDir, {
-    recursive: true
-  });
+  fs.mkdirSync(
+    userDataDir,
+    {
+      recursive: true
+    }
+  );
+
+  console.log(
+    `[Browser] 当前 DISPLAY：${process.env.DISPLAY}`
+  );
 
   console.log(
     `[Browser] 启动 Chromium，用户目录：${userDataDir}`
   );
 
-  context = await chromium.launchPersistentContext(
-    userDataDir,
-    {
-      headless: false,
+  context =
+    await chromium.launchPersistentContext(
+      userDataDir,
+      {
+        /*
+         * Render 上通过 Xvfb 提供虚拟显示器，
+         * 所以这里继续使用 headed 模式。
+         */
+        headless: false,
 
-      viewport: {
-        width: 1920,
-        height: 1080
-      },
+        viewport: {
+          width: 1920,
+          height: 1080
+        },
 
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-gpu",
-        "--disable-software-rasterizer",
-        "--disable-blink-features=AutomationControlled"
-      ]
-    }
-  );
+        args: [
+          "--no-sandbox",
+          "--disable-setuid-sandbox",
+          "--disable-dev-shm-usage",
+          "--disable-gpu",
+          "--disable-software-rasterizer",
+          "--disable-blink-features=AutomationControlled"
+        ]
+      }
+    );
 
   browser = context;
 
-  console.log("[Browser] Chromium 启动成功");
+  console.log(
+    "[Browser] Chromium 启动成功"
+  );
 }
 
-function getVisitErrorMessage(error, url) {
+
+/* =========================================================
+   处理访问错误
+   ========================================================= */
+
+function getVisitErrorMessage(
+  error,
+  url
+) {
   let message = "";
 
-  if (error && error.message) {
-    message = String(error.message);
+  if (
+    error &&
+    error.message
+  ) {
+    message =
+      String(error.message);
   } else if (error) {
-    message = String(error);
+    message =
+      String(error);
   }
 
   if (!message) {
@@ -141,26 +383,34 @@ function getVisitErrorMessage(error, url) {
   }
 
   /*
-   * Playwright 的错误信息有时会把完整 URL
-   * 带在错误文本里。
-   *
-   * 日志里不需要再次显示完整 URL，
-   * 因此只保留具体错误原因。
+   * 不在日志中重复显示完整 URL。
    */
   if (url) {
-    message = message.split(String(url)).join("[目标 URL]");
+    message =
+      message
+        .split(String(url))
+        .join("[目标 URL]");
   }
 
   return message;
 }
 
-async function visit(url, staySeconds = 10) {
+
+/* =========================================================
+   访问网页
+   ========================================================= */
+
+async function visit(
+  url,
+  staySeconds = 10
+) {
   await ensureBrowser();
 
   let page = null;
 
   try {
-    page = await context.newPage();
+    page =
+      await context.newPage();
 
     console.log(
       `[Browser] 开始访问：${url}`
@@ -169,7 +419,9 @@ async function visit(url, staySeconds = 10) {
     await page.goto(
       url,
       {
-        waitUntil: "domcontentloaded",
+        waitUntil:
+          "domcontentloaded",
+
         timeout: 60000
       }
     );
@@ -191,23 +443,14 @@ async function visit(url, staySeconds = 10) {
     return {
       success: true
     };
-  } catch (error) {
-    const reason = getVisitErrorMessage(
-      error,
-      url
-    );
 
-    /*
-     * 这里使用 error.message，而不是 error.name。
-     *
-     * 例如：
-     * Error
-     *
-     * 会变成：
-     * page.goto: net::ERR_NAME_NOT_RESOLVED at [目标 URL]
-     *
-     * 这样日志里才能看到真正的失败原因。
-     */
+  } catch (error) {
+    const reason =
+      getVisitErrorMessage(
+        error,
+        url
+      );
+
     addLog(
       `访问失败：${reason}`,
       "error"
@@ -222,6 +465,7 @@ async function visit(url, staySeconds = 10) {
       success: false,
       error: reason
     };
+
   } finally {
     if (page) {
       try {
@@ -236,8 +480,15 @@ async function visit(url, staySeconds = 10) {
   }
 }
 
+
+/* =========================================================
+   关闭浏览器
+   ========================================================= */
+
 async function closeBrowser() {
-  console.log("[Browser] 正在关闭浏览器...");
+  console.log(
+    "[Browser] 正在关闭浏览器..."
+  );
 
   if (context) {
     try {
@@ -257,6 +508,7 @@ async function closeBrowser() {
     try {
       fluxbox.kill();
     } catch {}
+
     fluxbox = null;
   }
 
@@ -264,13 +516,21 @@ async function closeBrowser() {
     try {
       xvfb.kill();
     } catch {}
+
     xvfb = null;
   }
 
   display = null;
 
-  console.log("[Browser] 浏览器已关闭");
+  console.log(
+    "[Browser] 浏览器已关闭"
+  );
 }
+
+
+/* =========================================================
+   Export
+   ========================================================= */
 
 module.exports = {
   visit,
