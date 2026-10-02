@@ -1,169 +1,18 @@
-```html
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0"
-  >
-
-  <title>Remain - 登录</title>
-
-  <link
-    rel="stylesheet"
-    href="/style.css"
-  >
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Remain</title>
+  <meta http-equiv="refresh" content="0;url=/">
 </head>
-
 <body>
-
-  <div class="login-page">
-
-    <div class="login-card">
-
-      <div class="login-header">
-        <h1>Remain</h1>
-        <p>请输入管理密码</p>
-      </div>
-
-
-      <form id="loginForm">
-
-        <div class="form-group">
-
-          <label for="password">
-            密码
-          </label>
-
-          <input
-            id="password"
-            type="password"
-            placeholder="请输入密码"
-            autocomplete="current-password"
-            required
-          >
-
-        </div>
-
-
-        <button
-          id="loginButton"
-          type="submit"
-          class="login-button"
-        >
-          登录
-        </button>
-
-
-        <div
-          id="loginError"
-          class="login-error"
-        ></div>
-
-      </form>
-
-    </div>
-
-  </div>
-
-
   <script>
-    const TOKEN_KEY = "remain_token";
-
-    const form =
-      document.getElementById("loginForm");
-
-    const password =
-      document.getElementById("password");
-
-    const button =
-      document.getElementById("loginButton");
-
-    const error =
-      document.getElementById("loginError");
-
-
-    form.addEventListener(
-      "submit",
-      async (event) => {
-
-        event.preventDefault();
-
-        error.textContent = "";
-
-        button.disabled = true;
-        button.textContent = "登录中...";
-
-        try {
-
-          const response =
-            await fetch(
-              "/api/login",
-              {
-                method: "POST",
-
-                headers: {
-                  "Content-Type":
-                    "application/json"
-                },
-
-                body: JSON.stringify({
-                  password:
-                    password.value
-                })
-              }
-            );
-
-
-          const data =
-            await response.json();
-
-
-          if (!response.ok) {
-            throw new Error(
-              data.error || "登录失败"
-            );
-          }
-
-
-          if (!data.token) {
-            throw new Error(
-              "服务器没有返回 Token"
-            );
-          }
-
-
-          localStorage.setItem(
-            TOKEN_KEY,
-            data.token
-          );
-
-
-          window.location.href = "/";
-
-        } catch (err) {
-
-          console.error(
-            "[Login]",
-            err
-          );
-
-          error.textContent =
-            err.message || "登录失败";
-
-        } finally {
-
-          button.disabled = false;
-          button.textContent = "登录";
-
-        }
-
-      }
-    );
+    window.location.replace("/");
   </script>
 
+  <p>
+    正在进入 Remain...
+  </p>
 </body>
 </html>
-```
