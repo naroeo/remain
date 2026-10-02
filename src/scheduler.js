@@ -74,7 +74,7 @@ async function runTask(task) {
   );
 
   addLog(
-    `开始执行任务 #${task.id}：${task.url}`
+    `开始执行任务 #${task.id}`
   );
 
   try {
@@ -92,8 +92,11 @@ async function runTask(task) {
         "success"
       );
 
+      /*
+       * 不在日志中显示 URL
+       */
       addLog(
-        `任务 #${task.id} 执行完成：${task.url}`
+        `任务 #${task.id} 执行完成`
       );
 
     } else {
@@ -103,8 +106,11 @@ async function runTask(task) {
         "failed"
       );
 
+      /*
+       * 不在日志中显示 URL
+       */
       addLog(
-        `任务 #${task.id} 执行失败：${task.url}`,
+        `任务 #${task.id} 执行失败`,
         "error"
       );
 
