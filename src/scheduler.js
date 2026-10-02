@@ -1,7 +1,6 @@
 const {
   getTasks,
   getTask,
-  updateTask,
   recordVisit
 } = require("./database");
 
@@ -13,69 +12,162 @@ const {
   addLog
 } = require("./logger");
 
-let schedulerTimer = null;
-
-let runningTasks = new Set();
-
-const CHECK_INTERVAL = 5000;
 
 /*
- * 判断任务是否应该执行
+ * ============================
+ * Scheduler
+ * ============================
  */
+
+let schedulerTimer = null;
+
+const runningTasks =
+  new Set();
+
+const CHECK_INTERVAL =
+  5000;
+
+
+/*
+ * ============================
+ * 判断任务是否应该执行
+ * ============================
+ */
+
 function shouldRun(task) {
 
   if (!task) {
     return false;
   }
 
+
   if (!task.enabled) {
     return false;
   }
 
+
   const now =
     Date.now();
 
+
   /*
-   * 没有 next_visit
-   * 表示第一次运行
+   * 第一次启动任务：
+   * 没有 next_visit 时立即执行。
    */
+
   if (!task.next_visit) {
     return true;
   }
+
 
   const nextVisit =
     new Date(
       task.next_visit
     ).getTime();
 
+
   return now >= nextVisit;
 }
 
+
 /*
- * 执行单个任务
+ * ============================
+ * 获取错误原因
+ * ============================
  */
-async function runTask(task) {
+
+function getErrorReason(
+  result
+) {
+
+  if (!result) {
+    return "未知错误";
+  }
+
+
+  /*
+   * browser.js 当前会返回：
+   *
+   * {
+   *   success: false,
+   *   error: error.message
+   * }
+   *
+   * 所以优先使用 error。
+   */
+
+  if (
+    typeof result.error ===
+    "string" &&
+    result.error.trim()
+  ) {
+
+    return result.error.trim();
+  }
+
+
+  if (
+    typeof result.message ===
+    "string" &&
+    result.message.trim()
+  ) {
+
+    return result.message.trim();
+  }
+
+
+  if (
+    typeof result.reason ===
+    "string" &&
+    result.reason.trim()
+  ) {
+
+    return result.reason.trim();
+  }
+
+
+  return "未知错误";
+}
+
+
+/*
+ * ============================
+ * 执行任务
+ * ============================
+ */
+
+async function runTask(
+  task
+) {
 
   if (!task) {
     return;
   }
 
+
   /*
-   * 防止同一个任务重复执行
+   * 防止同一个任务重复执行。
    */
+
   if (
-    runningTasks.has(task.id)
+    runningTasks.has(
+      task.id
+    )
   ) {
+
     return;
   }
+
 
   runningTasks.add(
     task.id
   );
 
+
   addLog(
     `开始执行任务 #${task.id}`
   );
+
 
   try {
 
@@ -85,35 +177,40 @@ async function runTask(task) {
         task.stay_seconds
       );
 
-    if (result.success) {
+
+    if (
+      result &&
+      result.success
+    ) {
 
       recordVisit(
         task.id,
         "success"
       );
 
-      /*
-       * 不在日志中显示 URL
-       */
+
       addLog(
         `任务 #${task.id} 执行完成`
       );
 
     } else {
 
+      const reason =
+        getErrorReason(
+          result
+        );
+
+
       recordVisit(
         task.id,
         "failed"
       );
 
-      /*
-       * 不在日志中显示 URL
-       */
+
       addLog(
-        `任务 #${task.id} 执行失败`,
+        `任务 #${task.id} 执行失败：${reason}`,
         "error"
       );
-
     }
 
   } catch (error) {
@@ -123,6 +220,7 @@ async function runTask(task) {
       error
     );
 
+
     try {
 
       recordVisit(
@@ -130,17 +228,26 @@ async function runTask(task) {
         "failed"
       );
 
-    } catch (recordError) {
+    } catch (
+      recordError
+    ) {
 
       console.error(
-        "[Scheduler] Failed to record visit:",
+        "[Scheduler] Record visit error:",
         recordError
       );
-
     }
 
+
+    const reason =
+      error &&
+      error.message
+        ? error.message
+        : String(error);
+
+
     addLog(
-      `任务 #${task.id} 出现错误：${error.message}`,
+      `任务 #${task.id} 出现错误：${reason}`,
       "error"
     );
 
@@ -149,16 +256,20 @@ async function runTask(task) {
     runningTasks.delete(
       task.id
     );
-
   }
 }
 
+
 /*
+ * ============================
  * 检查所有任务
+ * ============================
  */
+
 async function checkTasks() {
 
   let tasks;
+
 
   try {
 
@@ -168,64 +279,74 @@ async function checkTasks() {
   } catch (error) {
 
     console.error(
-      "[Scheduler] Failed to load tasks:",
+      "[Scheduler] Get tasks error:",
       error
     );
+
 
     addLog(
       `读取任务失败：${error.message}`,
       "error"
     );
 
+
     return;
   }
 
-  for (const task of tasks) {
+
+  for (
+    const task of tasks
+  ) {
 
     if (
       shouldRun(task)
     ) {
 
       /*
-       * 不 await
-       * 避免一个任务阻塞其他任务
+       * 不 await。
+       *
+       * 这样多个任务可以
+       * 同时运行，不互相等待。
        */
+
       runTask(task);
-
     }
-
   }
 }
 
+
 /*
- * 启动 Scheduler
+ * ============================
+ * Start
+ * ============================
  */
+
 function startScheduler() {
 
-  if (schedulerTimer) {
+  if (
+    schedulerTimer
+  ) {
+
     return;
   }
 
+
   addLog(
-    "Scheduler 已启动"
+    "任务调度器启动"
   );
 
-  /*
-   * 启动后立即检查一次
-   */
-  checkTasks();
 
   /*
-   * 每 5 秒检查一次任务
-   *
-   * 注意：
-   * 这里的 5 秒不是用户设置的访问间隔。
-   *
-   * 用户设置的：
-   * 5 分钟 / 10 分钟 / 30 分钟
-   *
-   * 仍然由 task.interval_minutes 控制。
+   * 服务启动后立即检查一次。
    */
+
+  checkTasks();
+
+
+  /*
+   * 后续每 5 秒检查一次。
+   */
+
   schedulerTimer =
     setInterval(
       checkTasks,
@@ -233,25 +354,38 @@ function startScheduler() {
     );
 }
 
+
 /*
- * 停止 Scheduler
+ * ============================
+ * Stop
+ * ============================
  */
+
 function stopScheduler() {
 
-  if (!schedulerTimer) {
-    return;
+  if (
+    schedulerTimer
+  ) {
+
+    clearInterval(
+      schedulerTimer
+    );
+
+    schedulerTimer = null;
   }
 
-  clearInterval(
-    schedulerTimer
-  );
-
-  schedulerTimer = null;
 
   addLog(
-    "Scheduler 已停止"
+    "任务调度器已停止"
   );
 }
+
+
+/*
+ * ============================
+ * Export
+ * ============================
+ */
 
 module.exports = {
   startScheduler,
