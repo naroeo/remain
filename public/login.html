@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <title>Remain - 登录</title>
+
+  <link
+    rel="stylesheet"
+    href="/style.css"
+  >
+
+</head>
+
+<body>
+
+  <div class="login-container">
+
+    <div class="login-card">
+
+      <div class="login-header">
+
+        <h1>Remain</h1>
+
+        <p>
+          定时保持网页活跃
+        </p>
+
+      </div>
+
+
+      <form
+        id="loginForm"
+        class="login-form"
+      >
+
+        <div class="form-group">
+
+          <label for="password">
+            管理密码
+          </label>
+
+          <input
+            id="password"
+            name="password"
+            type="password"
+            placeholder="请输入密码"
+            autocomplete="current-password"
+            required
+            autofocus
+          >
+
+        </div>
+
+
+        <div
+          id="loginError"
+          class="login-error"
+        ></div>
+
+
+        <button
+          id="loginButton"
+          type="submit"
+          class="primary-button login-button"
+        >
+          登录
+        </button>
+
+      </form>
+
+    </div>
+
+  </div>
+
+
+  <script>
+
+    const form =
+      document.getElementById(
+        "loginForm"
+      );
+
+    const passwordInput =
+      document.getElementById(
+        "password"
+      );
+
+    const loginButton =
+      document.getElementById(
+        "loginButton"
+      );
+
+    const loginError =
+      document.getElementById(
+        "loginError"
+      );
+
+
+    /*
+     * =========================
+     * Login
+     * =========================
+     */
+
+    form.addEventListener(
+      "submit",
+      async event => {
+
+        event.preventDefault();
+
+        loginError.textContent = "";
+
+        const password =
+          passwordInput.value;
+
+        if (!password) {
+
+          loginError.textContent =
+            "请输入密码";
+
+          return;
+        }
+
+
+        loginButton.disabled = true;
+
+        loginButton.textContent =
+          "登录中...";
+
+
+        try {
+
+          const response =
+            await fetch(
+              "/api/login",
+              {
+                method: "POST",
+
+                headers: {
+                  "Content-Type":
+                    "application/json"
+                },
+
+                body:
+                  JSON.stringify({
+                    password
+                  })
+              }
+            );
+
+
+          const data =
+            await response.json();
+
+
+          if (
+            response.ok &&
+            data.success
+          ) {
+
+            window.location.href =
+              "/";
+
+            return;
+          }
+
+
+          loginError.textContent =
+            data.error ||
+            "登录失败";
+
+
+          passwordInput.value = "";
+
+          passwordInput.focus();
+
+
+        } catch (error) {
+
+          console.error(
+            "Login error:",
+            error
+          );
+
+          loginError.textContent =
+            "无法连接服务器，请稍后重试";
+
+        } finally {
+
+          loginButton.disabled = false;
+
+          loginButton.textContent =
+            "登录";
+
+        }
+
+      }
+    );
+
+  </script>
+
+</body>
+
+</html>
