@@ -9,6 +9,10 @@ const {
 const fs = require("fs");
 const path = require("path");
 
+const {
+  addLog
+} = require("./logger");
+
 let browserContext = null;
 let displayProcess = null;
 let windowManagerProcess = null;
@@ -29,8 +33,8 @@ function startDisplay() {
     return;
   }
 
-  console.log(
-    "[Browser] Starting Xvfb..."
+  addLog(
+    "正在启动 Xvfb..."
   );
 
   displayProcess = spawn(
@@ -74,6 +78,7 @@ function startDisplay() {
   displayProcess.on(
     "exit",
     code => {
+
       console.log(
         `[Xvfb] exited with code ${code}`
       );
@@ -91,8 +96,8 @@ function startWindowManager() {
     return;
   }
 
-  console.log(
-    "[Browser] Starting Fluxbox..."
+  addLog(
+    "正在启动 Fluxbox..."
   );
 
   windowManagerProcess = spawn(
@@ -147,8 +152,8 @@ async function getBrowserContext() {
     }
   );
 
-  console.log(
-    "[Browser] Starting headed Chromium..."
+  addLog(
+    "正在启动有头 Chromium..."
   );
 
   browserContext =
@@ -172,8 +177,8 @@ async function getBrowserContext() {
       }
     );
 
-  console.log(
-    "[Browser] Chromium started"
+  addLog(
+    "Chromium 启动成功"
   );
 
   return browserContext;
@@ -197,31 +202,37 @@ async function visit(
     if (pages.length > 0) {
       page = pages[0];
     } else {
-      page = await context.newPage();
+      page =
+        await context.newPage();
     }
 
-    console.log(
-      `[Browser] Opening ${url}`
+    addLog(
+      `正在访问 ${url}`
     );
 
     await page.goto(
       url,
       {
-        waitUntil: "domcontentloaded",
+        waitUntil:
+          "domcontentloaded",
         timeout: 60000
       }
     );
 
-    console.log(
-      `[Browser] Page loaded: ${url}`
+    addLog(
+      `页面加载完成：${url}`
     );
 
     await page.waitForTimeout(
       staySeconds * 1000
     );
 
-    console.log(
-      `[Browser] Finished: ${url}`
+    addLog(
+      `页面停留 ${staySeconds} 秒结束`
+    );
+
+    addLog(
+      `访问完成：${url}`
     );
 
     return {
@@ -230,8 +241,9 @@ async function visit(
 
   } catch (error) {
 
-    console.error(
-      `[Browser] Error: ${error.message}`
+    addLog(
+      `访问失败：${error.message}`,
+      "error"
     );
 
     return {
@@ -246,12 +258,16 @@ async function closeBrowser() {
   if (browserContext) {
 
     try {
+
       await browserContext.close();
+
     } catch (error) {
+
       console.error(
         "[Browser] Close error:",
         error.message
       );
+
     }
 
     browserContext = null;
@@ -270,6 +286,10 @@ async function closeBrowser() {
 
     displayProcess = null;
   }
+
+  addLog(
+    "浏览器已关闭"
+  );
 }
 
 module.exports = {
