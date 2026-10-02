@@ -479,31 +479,27 @@ button:disabled {
 
 
 .task-id {
-  color: #737b8c;
-
-  font-size: 13px;
-
-  font-weight: 600;
+  font-size: 14px;
 }
-
 
 .task-name {
-  color: #f0f2f6;
-
-  font-size: 17px;
-
-  font-weight: 650;
-
-  word-break: break-word;
+  font-size: 14px;
 }
 
-
-.task-status {
-  flex-shrink: 0;
-
+.task-url {
   font-size: 14px;
+}
 
-  font-weight: 600;
+.task-url-value {
+  font-size: 14px;
+}
+
+.task-label {
+  font-size: 13px;
+}
+
+.task-value {
+  font-size: 14px;
 }
 
 
