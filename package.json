@@ -1,0 +1,15 @@
+{
+  "name": "remain",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Scheduled browser-based URL visitor",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "playwright": "^1.55.0",
+    "better-sqlite3": "^11.7.0"
+  }
+}
