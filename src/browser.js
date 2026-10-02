@@ -1,357 +1,215 @@
-const {
-  chromium
-} = require("playwright");
-
-const {
-  spawn
-} = require("child_process");
-
+const { chromium } = require("playwright");
+const { spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
+const { addLog } = require("./logger");
 
-const {
-  addLog
-} = require("./logger");
+let browser = null;
+let context = null;
 
-let browserContext = null;
-let displayProcess = null;
-let windowManagerProcess = null;
+let xvfb = null;
+let fluxbox = null;
+let display = null;
 
-const dataDir =
-  process.env.DATA_DIR ||
-  "/tmp/remain-data";
-
-const browserDataDir =
-  path.join(
-    dataDir,
-    "browser"
-  );
-
-/*
- * ============================
- * Xvfb
- * ============================
- */
-
-function startDisplay() {
-
-  if (displayProcess) {
-    return;
-  }
-
-  addLog(
-    "正在启动 Xvfb..."
-  );
-
-  displayProcess = spawn(
-    "Xvfb",
-    [
-      ":99",
-      "-screen",
-      "0",
-      "1280x720x24",
-      "-ac",
-      "-nolisten",
-      "tcp"
-    ],
-    {
-      stdio: [
-        "ignore",
-        "pipe",
-        "pipe"
-      ]
-    }
-  );
-
-  displayProcess.stdout.on(
-    "data",
-    data => {
-
-      console.log(
-        `[Xvfb] ${data}`
-      );
-
-    }
-  );
-
-  displayProcess.stderr.on(
-    "data",
-    data => {
-
-      console.error(
-        `[Xvfb] ${data}`
-      );
-
-    }
-  );
-
-  displayProcess.on(
-    "exit",
-    code => {
-
-      console.log(
-        `[Xvfb] exited with code ${code}`
-      );
-
-      displayProcess = null;
-
-    }
-  );
-
-  process.env.DISPLAY = ":99";
-}
-
-
-/*
- * ============================
- * Fluxbox
- * ============================
- */
-
-function startWindowManager() {
-
-  if (windowManagerProcess) {
-    return;
-  }
-
-  addLog(
-    "正在启动 Fluxbox..."
-  );
-
-  windowManagerProcess = spawn(
-    "fluxbox",
-    [],
-    {
-      env: {
-        ...process.env,
-        DISPLAY: ":99"
-      },
-
-      stdio: [
-        "ignore",
-        "pipe",
-        "pipe"
-      ]
-    }
-  );
-
-  windowManagerProcess.stdout.on(
-    "data",
-    data => {
-
-      console.log(
-        `[Fluxbox] ${data}`
-      );
-
-    }
-  );
-
-  windowManagerProcess.stderr.on(
-    "data",
-    data => {
-
-      console.error(
-        `[Fluxbox] ${data}`
-      );
-
-    }
-  );
-
-  windowManagerProcess.on(
-    "exit",
-    () => {
-
-      windowManagerProcess = null;
-
-    }
-  );
-}
-
-
-/*
- * ============================
- * Browser
- * ============================
- */
-
-async function getBrowserContext() {
-
-  /*
-   * Chromium 已经启动
-   */
-
-  if (browserContext) {
-
-    /*
-     * 检查 Chromium 是否仍然有效
-     */
-
-    try {
-
-      browserContext.pages();
-
-      return browserContext;
-
-    } catch (error) {
-
-      browserContext = null;
-
-    }
-
-  }
-
-  startDisplay();
-
-  startWindowManager();
-
-  fs.mkdirSync(
-    browserDataDir,
-    {
-      recursive: true
-    }
-  );
-
-  addLog(
-    "正在启动有头 Chromium..."
-  );
-
-  browserContext =
-    await chromium.launchPersistentContext(
-      browserDataDir,
+function commandExists(command) {
+  try {
+    require("child_process").execFileSync(
+      "which",
+      [command],
       {
-        headless: false,
-
-        viewport: {
-          width: 1280,
-          height: 720
-        },
-
-        args: [
-          "--no-sandbox",
-          "--disable-dev-shm-usage",
-          "--disable-gpu",
-          "--disable-software-rasterizer",
-          "--window-size=1280,720"
-        ]
+        stdio: "ignore"
       }
     );
 
-  /*
-   * Chromium 意外关闭时，
-   * 清空引用，允许下次重新启动。
-   */
+    return true;
+  } catch {
+    return false;
+  }
+}
 
-  browserContext.on(
-    "close",
-    () => {
+async function ensureDisplay() {
+  if (process.env.DISPLAY) {
+    display = process.env.DISPLAY;
+    return;
+  }
 
-      browserContext = null;
+  if (!commandExists("Xvfb")) {
+    throw new Error("系统未安装 Xvfb");
+  }
 
+  if (!commandExists("fluxbox")) {
+    throw new Error("系统未安装 fluxbox");
+  }
+
+  const displayNumber = 99;
+  display = `:${displayNumber}`;
+
+  xvfb = spawn(
+    "Xvfb",
+    [
+      display,
+      "-screen",
+      "0",
+      "1920x1080x24",
+      "-ac"
+    ],
+    {
+      detached: false,
+      stdio: "ignore"
     }
   );
 
-  addLog(
-    "Chromium 启动成功"
-  );
+  await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      resolve();
+    }, 1000);
 
-  return browserContext;
+    xvfb.once("error", error => {
+      clearTimeout(timer);
+      reject(error);
+    });
+  });
+
+  process.env.DISPLAY = display;
+
+  fluxbox = spawn(
+    "fluxbox",
+    [],
+    {
+      detached: false,
+      stdio: "ignore"
+    }
+  );
 }
 
+async function ensureBrowser() {
+  if (browser && context) {
+    return;
+  }
 
-/*
- * ============================
- * Visit
- * ============================
- *
- * 每次访问创建独立 Page。
- *
- * 多任务时：
- *
- * Task #1 → Page 1
- * Task #2 → Page 2
- * Task #3 → Page 3
- *
- * 所有 Page 共用同一个 Chromium。
- */
+  await ensureDisplay();
 
-async function visit(
-  url,
-  staySeconds = 10
-) {
+  const userDataDir =
+    process.env.PLAYWRIGHT_USER_DATA_DIR ||
+    "/tmp/remain-playwright";
 
-  let context;
+  fs.mkdirSync(userDataDir, {
+    recursive: true
+  });
+
+  console.log(
+    `[Browser] 启动 Chromium，用户目录：${userDataDir}`
+  );
+
+  context = await chromium.launchPersistentContext(
+    userDataDir,
+    {
+      headless: false,
+
+      viewport: {
+        width: 1920,
+        height: 1080
+      },
+
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+        "--disable-software-rasterizer",
+        "--disable-blink-features=AutomationControlled"
+      ]
+    }
+  );
+
+  browser = context;
+
+  console.log("[Browser] Chromium 启动成功");
+}
+
+function getVisitErrorMessage(error, url) {
+  let message = "";
+
+  if (error && error.message) {
+    message = String(error.message);
+  } else if (error) {
+    message = String(error);
+  }
+
+  if (!message) {
+    message = "未知错误";
+  }
+
+  /*
+   * Playwright 的错误信息有时会把完整 URL
+   * 带在错误文本里。
+   *
+   * 日志里不需要再次显示完整 URL，
+   * 因此只保留具体错误原因。
+   */
+  if (url) {
+    message = message.split(String(url)).join("[目标 URL]");
+  }
+
+  return message;
+}
+
+async function visit(url, staySeconds = 10) {
+  await ensureBrowser();
+
   let page = null;
 
   try {
+    page = await context.newPage();
 
-    context =
-      await getBrowserContext();
-
-    /*
-     * 每个任务创建自己的 Page。
-     *
-     * 不再使用：
-     *
-     * context.pages()[0]
-     *
-     * 避免多个任务抢同一个页面。
-     */
-
-    page =
-      await context.newPage();
-
-    /*
-     * 不在日志中输出 URL
-     */
-
-    addLog(
-      "正在访问目标网页"
+    console.log(
+      `[Browser] 开始访问：${url}`
     );
 
     await page.goto(
       url,
       {
-        waitUntil:
-          "domcontentloaded",
-
-        timeout:
-          60000
+        waitUntil: "domcontentloaded",
+        timeout: 60000
       }
     );
 
-    /*
-     * 不在日志中输出 URL
-     */
-
-    addLog(
-      "页面加载完成"
+    console.log(
+      `[Browser] 页面加载完成：${url}`
     );
 
-    await page.waitForTimeout(
-      staySeconds * 1000
-    );
+    if (staySeconds > 0) {
+      await page.waitForTimeout(
+        staySeconds * 1000
+      );
+    }
 
-    addLog(
-      `页面停留 ${staySeconds} 秒结束`
-    );
-
-    addLog(
-      "访问完成"
+    console.log(
+      `[Browser] 停留完成：${url}`
     );
 
     return {
       success: true
     };
-
   } catch (error) {
+    const reason = getVisitErrorMessage(
+      error,
+      url
+    );
 
     /*
-     * 错误信息可能包含 URL，
-     * 所以 Render 日志中不直接输出 error.message。
+     * 这里使用 error.message，而不是 error.name。
+     *
+     * 例如：
+     * Error
+     *
+     * 会变成：
+     * page.goto: net::ERR_NAME_NOT_RESOLVED at [目标 URL]
+     *
+     * 这样日志里才能看到真正的失败原因。
      */
-
     addLog(
-      `访问失败：${error.name || "未知错误"}`,
+      `访问失败：${reason}`,
       "error"
     );
 
@@ -362,99 +220,57 @@ async function visit(
 
     return {
       success: false,
-      error:
-        error.message
+      error: reason
     };
-
   } finally {
-
-    /*
-     * 当前任务完成后关闭自己的 Page。
-     *
-     * 不关闭 Chromium。
-     *
-     * 这样：
-     *
-     * Task #1 完成 → 关闭 Page #1
-     * Task #2 完成 → 关闭 Page #2
-     *
-     * Chromium 继续保持运行。
-     */
-
     if (page) {
-
       try {
-
         await page.close();
-
       } catch (error) {
-
         console.error(
-          "[Browser] Page close error:",
-          error.message
+          "[Browser] 页面关闭失败:",
+          error
         );
-
       }
-
     }
-
   }
 }
-
-
-/*
- * ============================
- * Close Browser
- * ============================
- */
 
 async function closeBrowser() {
+  console.log("[Browser] 正在关闭浏览器...");
 
-  if (browserContext) {
-
+  if (context) {
     try {
-
-      await browserContext.close();
-
+      await context.close();
     } catch (error) {
-
       console.error(
-        "[Browser] Close error:",
-        error.message
+        "[Browser] 关闭 Chromium 失败:",
+        error
       );
-
     }
 
-    browserContext = null;
+    context = null;
+    browser = null;
   }
 
-  if (windowManagerProcess) {
-
-    windowManagerProcess.kill();
-
-    windowManagerProcess = null;
-
+  if (fluxbox) {
+    try {
+      fluxbox.kill();
+    } catch {}
+    fluxbox = null;
   }
 
-  if (displayProcess) {
-
-    displayProcess.kill();
-
-    displayProcess = null;
-
+  if (xvfb) {
+    try {
+      xvfb.kill();
+    } catch {}
+    xvfb = null;
   }
 
-  addLog(
-    "浏览器已关闭"
-  );
+  display = null;
+
+  console.log("[Browser] 浏览器已关闭");
 }
-
-
-/*
- * ============================
- * Export
- * ============================
- */
 
 module.exports = {
   visit,
