@@ -1,6 +1,7 @@
 const {
   getTasks,
   getTask,
+  updateTask,
   recordVisit
 } = require("./database");
 
@@ -8,92 +9,245 @@ const {
   visit
 } = require("./browser");
 
-const running = new Set();
+const {
+  addLog
+} = require("./logger");
 
-async function runTask(id) {
+let schedulerTimer = null;
 
-  if (running.has(id)) {
+let runningTasks = new Set();
+
+const CHECK_INTERVAL = 5000;
+
+/*
+ * 判断任务是否应该执行
+ */
+function shouldRun(task) {
+
+  if (!task) {
+    return false;
+  }
+
+  if (!task.enabled) {
+    return false;
+  }
+
+  const now =
+    Date.now();
+
+  /*
+   * 没有 next_visit
+   * 表示第一次运行
+   */
+  if (!task.next_visit) {
+    return true;
+  }
+
+  const nextVisit =
+    new Date(
+      task.next_visit
+    ).getTime();
+
+  return now >= nextVisit;
+}
+
+/*
+ * 执行单个任务
+ */
+async function runTask(task) {
+
+  if (!task) {
     return;
   }
 
-  const task = getTask(id);
-
-  if (!task || !task.enabled) {
+  /*
+   * 防止同一个任务重复执行
+   */
+  if (
+    runningTasks.has(task.id)
+  ) {
     return;
   }
 
-  running.add(id);
+  runningTasks.add(
+    task.id
+  );
+
+  addLog(
+    `开始执行任务 #${task.id}：${task.url}`
+  );
 
   try {
 
-    const result = await visit(
-      task.url,
-      task.stay_seconds
-    );
+    const result =
+      await visit(
+        task.url,
+        task.stay_seconds
+      );
 
-    recordVisit(
-      id,
-      result.success
-        ? "success"
-        : "error"
-    );
+    if (result.success) {
+
+      recordVisit(
+        task.id,
+        "success"
+      );
+
+      addLog(
+        `任务 #${task.id} 执行完成：${task.url}`
+      );
+
+    } else {
+
+      recordVisit(
+        task.id,
+        "failed"
+      );
+
+      addLog(
+        `任务 #${task.id} 执行失败：${task.url}`,
+        "error"
+      );
+
+    }
 
   } catch (error) {
 
     console.error(
-      `[Scheduler]`,
-      error.message
+      "[Scheduler]",
+      error
     );
 
-    recordVisit(
-      id,
+    try {
+
+      recordVisit(
+        task.id,
+        "failed"
+      );
+
+    } catch (recordError) {
+
+      console.error(
+        "[Scheduler] Failed to record visit:",
+        recordError
+      );
+
+    }
+
+    addLog(
+      `任务 #${task.id} 出现错误：${error.message}`,
       "error"
     );
 
   } finally {
 
-    running.delete(id);
+    runningTasks.delete(
+      task.id
+    );
+
   }
 }
 
-function startScheduler() {
+/*
+ * 检查所有任务
+ */
+async function checkTasks() {
 
-  console.log(
-    "[Scheduler] Started"
-  );
+  let tasks;
 
-  setInterval(async () => {
+  try {
 
-    const tasks = getTasks();
+    tasks =
+      getTasks();
 
-    const now = Date.now();
+  } catch (error) {
 
-    for (const task of tasks) {
+    console.error(
+      "[Scheduler] Failed to load tasks:",
+      error
+    );
 
-      if (!task.enabled) {
-        continue;
-      }
+    addLog(
+      `读取任务失败：${error.message}`,
+      "error"
+    );
 
-      if (running.has(task.id)) {
-        continue;
-      }
+    return;
+  }
 
-      if (!task.next_visit) {
-        await runTask(task.id);
-        continue;
-      }
+  for (const task of tasks) {
 
-      const next =
-        new Date(task.next_visit).getTime();
+    if (
+      shouldRun(task)
+    ) {
 
-      if (now >= next) {
-        runTask(task.id);
-      }
+      /*
+       * 不 await
+       * 避免一个任务阻塞其他任务
+       */
+      runTask(task);
+
     }
 
-  }, 5000);
+  }
+}
+
+/*
+ * 启动 Scheduler
+ */
+function startScheduler() {
+
+  if (schedulerTimer) {
+    return;
+  }
+
+  addLog(
+    "Scheduler 已启动"
+  );
+
+  /*
+   * 启动后立即检查一次
+   */
+  checkTasks();
+
+  /*
+   * 每 5 秒检查一次任务
+   *
+   * 注意：
+   * 这里的 5 秒不是用户设置的访问间隔。
+   *
+   * 用户设置的：
+   * 5 分钟 / 10 分钟 / 30 分钟
+   *
+   * 仍然由 task.interval_minutes 控制。
+   */
+  schedulerTimer =
+    setInterval(
+      checkTasks,
+      CHECK_INTERVAL
+    );
+}
+
+/*
+ * 停止 Scheduler
+ */
+function stopScheduler() {
+
+  if (!schedulerTimer) {
+    return;
+  }
+
+  clearInterval(
+    schedulerTimer
+  );
+
+  schedulerTimer = null;
+
+  addLog(
+    "Scheduler 已停止"
+  );
 }
 
 module.exports = {
-  startScheduler
+  startScheduler,
+  stopScheduler
 };
