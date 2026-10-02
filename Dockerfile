@@ -9,8 +9,12 @@ RUN apt-get update && apt-get install -y \
     xvfb \
     fluxbox \
     dbus-x11 \
-    rclone \
+    curl \
     && rm -rf /var/lib/apt/lists/*
+
+# 安装最新版 rclone
+RUN curl https://rclone.org/install.sh | bash && \
+    rclone version
 
 COPY package*.json ./
 
