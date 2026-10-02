@@ -1010,11 +1010,9 @@ app.delete(
  * SSE 实时日志
  * ============================
  *
- * 关键：
- * logger.subscribe() 使用的是
- * Node 原生 ServerResponse，
- * 所以这里传 res.res，
- * 不能直接传 Express 的 res。
+ * logger.subscribe() 接收的是
+ * Express 的 response 对象，
+ * 所以这里直接传 res。
  * ============================
  */
 
@@ -1025,7 +1023,7 @@ app.get(
     try {
 
       subscribe(
-        res.res
+        res
       );
 
     } catch (error) {
