@@ -481,12 +481,13 @@ app.post(
 
 
       const task =
-        createTask(
-          name,
-          url,
-          intervalMinutes,
-          staySeconds
-        );
+  createTask({
+    name,
+    url,
+    interval_minutes: intervalMinutes,
+    stay_seconds: staySeconds,
+    enabled: 1
+  });
 
 
       console.log(
