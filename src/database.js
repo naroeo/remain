@@ -2,15 +2,22 @@ const Database = require("better-sqlite3");
 const fs = require("fs");
 const path = require("path");
 
-const dataDir = "/app/data";
+const dataDir =
+  process.env.DATA_DIR ||
+  "/tmp/remain-data";
 
 fs.mkdirSync(dataDir, {
   recursive: true
 });
 
-const db = new Database(
-  path.join(dataDir, "app.db")
+const dbPath = path.join(
+  dataDir,
+  "app.db"
 );
+
+console.log(`[Database] ${dbPath}`);
+
+const db = new Database(dbPath);
 
 db.pragma("journal_mode = WAL");
 
@@ -31,21 +38,33 @@ db.exec(`
 
 function getTasks() {
   return db
-    .prepare("SELECT * FROM tasks ORDER BY id DESC")
+    .prepare(
+      "SELECT * FROM tasks ORDER BY id DESC"
+    )
     .all();
 }
 
 function getTask(id) {
   return db
-    .prepare("SELECT * FROM tasks WHERE id = ?")
+    .prepare(
+      "SELECT * FROM tasks WHERE id = ?"
+    )
     .get(id);
 }
 
-function createTask(url, intervalMinutes, staySeconds) {
+function createTask(
+  url,
+  intervalMinutes,
+  staySeconds
+) {
   const result = db
     .prepare(`
-      INSERT INTO tasks
-      (url, interval_minutes, stay_seconds, created_at)
+      INSERT INTO tasks (
+        url,
+        interval_minutes,
+        stay_seconds,
+        created_at
+      )
       VALUES (?, ?, ?, ?)
     `)
     .run(
@@ -55,7 +74,9 @@ function createTask(url, intervalMinutes, staySeconds) {
       new Date().toISOString()
     );
 
-  return getTask(result.lastInsertRowid);
+  return getTask(
+    result.lastInsertRowid
+  );
 }
 
 function updateTask(id, fields) {
@@ -65,10 +86,20 @@ function updateTask(id, fields) {
     return null;
   }
 
-  const url = fields.url ?? task.url;
-  const interval = fields.interval_minutes ?? task.interval_minutes;
-  const stay = fields.stay_seconds ?? task.stay_seconds;
-  const enabled = fields.enabled ?? task.enabled;
+  const url =
+    fields.url ?? task.url;
+
+  const interval =
+    fields.interval_minutes ??
+    task.interval_minutes;
+
+  const stay =
+    fields.stay_seconds ??
+    task.stay_seconds;
+
+  const enabled =
+    fields.enabled ??
+    task.enabled;
 
   db.prepare(`
     UPDATE tasks
@@ -100,7 +131,9 @@ function recordVisit(id, status) {
 
   const next = new Date(
     now.getTime() +
-    task.interval_minutes * 60 * 1000
+    task.interval_minutes *
+    60 *
+    1000
   );
 
   db.prepare(`
