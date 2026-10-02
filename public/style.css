@@ -128,4 +128,111 @@ button.danger {
   .actions {
     flex-wrap: wrap;
   }
+
+/* =========================
+   Runtime Logs
+   ========================= */
+
+.logs-section {
+  margin-top: 24px;
+}
+
+.section-description {
+  margin: 4px 0 0;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.logs {
+  width: 100%;
+  box-sizing: border-box;
+
+  height: 280px;
+
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  background: #111827;
+  color: #d1d5db;
+
+  border: 1px solid #1f2937;
+  border-radius: 10px;
+
+  padding: 12px;
+
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    "Liberation Mono",
+    "Courier New",
+    monospace;
+
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* 单条日志 */
+.log {
+  padding: 3px 0;
+
+  border-bottom:
+    1px solid rgba(
+      255,
+      255,
+      255,
+      0.05
+    );
+
+  word-break: break-word;
+}
+
+.log:last-child {
+  border-bottom: none;
+}
+
+/* 日志时间 */
+.log-time {
+  color: #6b7280;
+  margin-right: 10px;
+}
+
+/* 普通日志 */
+.log-info {
+  color: #d1d5db;
+}
+
+/* 错误日志 */
+.log-error {
+  color: #f87171;
+}
+
+/* 空日志状态 */
+.log-empty {
+  color: #6b7280;
+
+  text-align: center;
+
+  padding: 40px 10px;
+}
+
+/* 日志滚动条 */
+.logs::-webkit-scrollbar {
+  width: 8px;
+}
+
+.logs::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+
+.logs::-webkit-scrollbar-thumb {
+  background: #374151;
+  border-radius: 4px;
+}
+
+.logs::-webkit-scrollbar-thumb:hover {
+  background: #4b5563;
+}
 }
