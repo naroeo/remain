@@ -1,12 +1,12 @@
 const express = require("express");
 const path = require("path");
+const crypto = require("crypto");
 
 const {
   getTasks,
   getTask,
   createTask,
   updateTask,
-  recordVisit,
   deleteTask
 } = require("./database");
 
@@ -26,6 +26,18 @@ const app = express();
 const PORT =
   process.env.PORT || 3000;
 
+const ADMIN_PASSWORD =
+  process.env.ADMIN_PASSWORD || "";
+
+const SESSION_COOKIE =
+  "remain_session";
+
+const SESSION_TTL =
+  24 * 60 * 60 * 1000;
+
+const sessions =
+  new Map();
+
 
 /*
  * ============================
@@ -37,14 +49,336 @@ app.use(
   express.json()
 );
 
+
+/*
+ * ============================
+ * Session Helpers
+ * ============================
+ */
+
+function createSession() {
+
+  const token =
+    crypto.randomBytes(32).toString("hex");
+
+  sessions.set(
+    token,
+    Date.now() + SESSION_TTL
+  );
+
+  return token;
+}
+
+
+function getSessionToken(req) {
+
+  const cookie =
+    req.headers.cookie || "";
+
+  const match =
+    cookie
+      .split(";")
+      .map(item => item.trim())
+      .find(
+        item =>
+          item.startsWith(
+            `${SESSION_COOKIE}=`
+          )
+      );
+
+  if (!match) {
+    return null;
+  }
+
+  return match.substring(
+    SESSION_COOKIE.length + 1
+  );
+}
+
+
+function isAuthenticated(req) {
+
+  const token =
+    getSessionToken(req);
+
+  if (!token) {
+    return false;
+  }
+
+  const expires =
+    sessions.get(token);
+
+  if (!expires) {
+    return false;
+  }
+
+  if (
+    Date.now() > expires
+  ) {
+
+    sessions.delete(token);
+
+    return false;
+  }
+
+  return true;
+}
+
+
+function requireAuth(req, res, next) {
+
+  if (
+    isAuthenticated(req)
+  ) {
+
+    return next();
+  }
+
+  /*
+   * API 请求返回 401
+   */
+  if (
+    req.path.startsWith("/api/")
+  ) {
+
+    return res
+      .status(401)
+      .json({
+        error: "Unauthorized"
+      });
+
+  }
+
+  /*
+   * 页面访问跳转登录页
+   */
+  return res.redirect(
+    "/login.html"
+  );
+}
+
+
+/*
+ * ============================
+ * Login API
+ * ============================
+ */
+
+app.post(
+  "/api/login",
+  (req, res) => {
+
+    if (!ADMIN_PASSWORD) {
+
+      console.error(
+        "[Auth] ADMIN_PASSWORD is not configured"
+      );
+
+      return res
+        .status(500)
+        .json({
+          error:
+            "Server authentication is not configured"
+        });
+
+    }
+
+    const password =
+      String(
+        req.body?.password || ""
+      );
+
+    if (
+      !crypto.timingSafeEqual(
+        Buffer.from(password),
+        Buffer.from(ADMIN_PASSWORD)
+      )
+    ) {
+
+      addLog(
+        "登录失败",
+        "error"
+      );
+
+      return res
+        .status(401)
+        .json({
+          error:
+            "密码错误"
+        });
+
+    }
+
+    const token =
+      createSession();
+
+    res.setHeader(
+      "Set-Cookie",
+      `${SESSION_COOKIE}=${token}; HttpOnly; Path=/; Max-Age=${SESSION_TTL / 1000}; SameSite=Lax; Secure`
+    );
+
+    addLog(
+      "管理员登录成功"
+    );
+
+    res.json({
+      success: true
+    });
+
+  }
+);
+
+
+/*
+ * ============================
+ * Logout API
+ * ============================
+ */
+
+app.post(
+  "/api/logout",
+  (req, res) => {
+
+    const token =
+      getSessionToken(req);
+
+    if (token) {
+      sessions.delete(token);
+    }
+
+    res.setHeader(
+      "Set-Cookie",
+      `${SESSION_COOKIE}=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax; Secure`
+    );
+
+    res.json({
+      success: true
+    });
+
+  }
+);
+
+
+/*
+ * ============================
+ * Login Status
+ * ============================
+ */
+
+app.get(
+  "/api/auth/status",
+  (req, res) => {
+
+    res.json({
+      authenticated:
+        isAuthenticated(req)
+    });
+
+  }
+);
+
+
+/*
+ * ============================
+ * Public Login Page
+ * ============================
+ */
+
+app.get(
+  "/login",
+  (req, res) => {
+
+    if (
+      isAuthenticated(req)
+    ) {
+
+      return res.redirect(
+        "/"
+      );
+
+    }
+
+    res.sendFile(
+      path.join(
+        __dirname,
+        "..",
+        "public",
+        "login.html"
+      )
+    );
+
+  }
+);
+
+
+/*
+ * ============================
+ * Protected Static Files
+ * ============================
+ *
+ * index.html 需要登录。
+ * login.html 保持公开。
+ */
+
+app.get(
+  "/",
+  (req, res) => {
+
+    if (
+      !isAuthenticated(req)
+    ) {
+
+      return res.redirect(
+        "/login"
+      );
+
+    }
+
+    res.sendFile(
+      path.join(
+        __dirname,
+        "..",
+        "public",
+        "index.html"
+      )
+    );
+
+  }
+);
+
+
+/*
+ * login.html / CSS / JS
+ */
+
 app.use(
   express.static(
     path.join(
       __dirname,
       "..",
       "public"
-    )
+    ),
+    {
+      index: false
+    }
   )
+);
+
+
+/*
+ * ============================
+ * Protected API
+ * ============================
+ */
+
+app.use(
+  "/api/tasks",
+  requireAuth
+);
+
+app.use(
+  "/api/logs",
+  requireAuth
 );
 
 
@@ -54,7 +388,6 @@ app.use(
  * ============================
  */
 
-// 获取所有任务
 app.get(
   "/api/tasks",
   (req, res) => {
@@ -84,7 +417,6 @@ app.get(
 );
 
 
-// 获取单个任务
 app.get(
   "/api/tasks/:id",
   (req, res) => {
@@ -130,7 +462,6 @@ app.get(
 );
 
 
-// 创建任务
 app.post(
   "/api/tasks",
   (req, res) => {
@@ -200,7 +531,7 @@ app.post(
         );
 
       /*
-       * 不在日志中显示 URL
+       * Render 日志不输出 URL
        */
       addLog(
         `创建任务 #${task.id}`
@@ -270,18 +601,14 @@ app.post(
           }
         );
 
-      const result =
-        updatedTask ||
-        getTask(id);
-
-      /*
-       * 不在日志中显示 URL
-       */
       addLog(
         `启动任务 #${id}`
       );
 
-      res.json(result);
+      res.json(
+        updatedTask ||
+        getTask(id)
+      );
 
     } catch (error) {
 
@@ -345,18 +672,14 @@ app.post(
           }
         );
 
-      const result =
-        updatedTask ||
-        getTask(id);
-
-      /*
-       * 不在日志中显示 URL
-       */
       addLog(
         `停止任务 #${id}`
       );
 
-      res.json(result);
+      res.json(
+        updatedTask ||
+        getTask(id)
+      );
 
     } catch (error) {
 
@@ -415,9 +738,6 @@ app.put(
 
       }
 
-      /*
-       * 不在日志中显示 URL
-       */
       addLog(
         `更新任务 #${task.id}`
       );
@@ -480,9 +800,6 @@ app.delete(
 
       deleteTask(id);
 
-      /*
-       * 不在日志中显示 URL
-       */
       addLog(
         `删除任务 #${id}`
       );
@@ -520,7 +837,6 @@ app.delete(
  * ============================
  */
 
-// 获取历史日志
 app.get(
   "/api/logs",
   (req, res) => {
@@ -549,7 +865,6 @@ app.get(
 );
 
 
-// 实时日志 SSE
 app.get(
   "/api/logs/stream",
   (req, res) => {
@@ -597,6 +912,42 @@ app.get(
     });
 
   }
+);
+
+
+/*
+ * ============================
+ * Session Cleanup
+ * ============================
+ */
+
+setInterval(
+  () => {
+
+    const now =
+      Date.now();
+
+    for (
+      const [
+        token,
+        expires
+      ] of sessions
+    ) {
+
+      if (
+        now > expires
+      ) {
+
+        sessions.delete(
+          token
+        );
+
+      }
+
+    }
+
+  },
+  60 * 60 * 1000
 );
 
 
