@@ -1,4 +1,3 @@
-```css
 * {
   box-sizing: border-box;
 }
@@ -16,19 +15,15 @@ body {
     BlinkMacSystemFont,
     "Segoe UI",
     "Microsoft YaHei",
+    Arial,
     sans-serif;
 
-  background: #0f1115;
-  color: #f2f2f2;
+  background: #11151c;
+  color: #e8ecf3;
 }
 
-
-/* =========================
-   Common
-========================= */
-
-.hidden {
-  display: none !important;
+body.modal-open {
+  overflow: hidden;
 }
 
 button,
@@ -40,14 +35,19 @@ button {
   cursor: pointer;
 }
 
-input {
-  width: 100%;
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.hidden {
+  display: none !important;
 }
 
 
-/* =========================
-   Login
-========================= */
+/* =========================================================
+   登录页面
+   ========================================================= */
 
 .login-page {
   min-height: 100vh;
@@ -56,20 +56,19 @@ input {
   align-items: center;
   justify-content: center;
 
-  padding: 20px;
+  padding: 24px;
 }
 
 .login-card {
   width: 100%;
-  max-width: 400px;
+  max-width: 420px;
 
   padding: 32px;
 
-  background: #181b21;
+  background: #1a202a;
 
-  border: 1px solid #292e38;
-
-  border-radius: 16px;
+  border: 1px solid #2a3240;
+  border-radius: 14px;
 
   box-shadow:
     0 20px 50px rgba(0, 0, 0, 0.35);
@@ -83,128 +82,82 @@ input {
 .login-header h1 {
   margin: 0 0 8px;
 
-  font-size: 28px;
+  font-size: 30px;
+  font-weight: 700;
 }
 
 .login-header p {
   margin: 0;
 
-  color: #969daa;
-}
-
-.login-form {
-  display: flex;
-  flex-direction: column;
-}
-
-.login-button {
-  width: 100%;
-
-  margin-top: 8px;
-
-  padding: 12px 16px;
-
-  border: none;
-  border-radius: 8px;
-
-  background: #4f8cff;
-  color: white;
-
-  font-weight: 600;
-
-  transition:
-    opacity 0.2s,
-    transform 0.2s;
-}
-
-.login-button:hover {
-  opacity: 0.9;
-}
-
-.login-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.login-error {
-  min-height: 22px;
-
-  margin-top: 12px;
-
-  text-align: center;
-
-  color: #ff6b6b;
-
+  color: #858d9b;
   font-size: 14px;
 }
 
 
-/* =========================
-   Header
-========================= */
+/* =========================================================
+   主页面
+   ========================================================= */
 
-.header {
-  display: flex;
-
-  align-items: center;
-  justify-content: space-between;
-
-  padding: 20px 24px;
-
-  border-bottom: 1px solid #292e38;
-
-  background: #15181d;
+.app-page {
+  min-height: 100vh;
 }
 
-.header h1 {
-  margin: 0;
+.app-header {
+  border-bottom: 1px solid #252d39;
 
-  font-size: 24px;
+  background: #151a22;
 }
 
-.header p {
-  margin: 4px 0 0;
-
-  color: #8e95a3;
-
-  font-size: 14px;
-}
-
-
-/* =========================
-   Container
-========================= */
-
-.container {
-  width: 100%;
-  max-width: 1100px;
+.header-inner {
+  width: min(1200px, calc(100% - 32px));
 
   margin: 0 auto;
 
-  padding: 24px;
+  min-height: 76px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 20px;
+}
+
+.header-inner h1 {
+  margin: 0;
+
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.header-subtitle {
+  margin: 4px 0 0;
+
+  color: #858d9b;
+  font-size: 13px;
+}
+
+.container {
+  width: min(1200px, calc(100% - 32px));
+
+  margin: 0 auto;
+
+  padding: 28px 0 60px;
 }
 
 
-/* =========================
+/* =========================================================
    Panel
-========================= */
+   ========================================================= */
 
 .panel {
   margin-bottom: 24px;
 
-  padding: 20px;
+  padding: 24px;
 
-  background: #181b21;
+  background: #1a202a;
 
-  border: 1px solid #292e38;
-
+  border: 1px solid #2a3240;
   border-radius: 12px;
-}
-
-.panel h2 {
-  margin: 0 0 18px;
-
-  font-size: 18px;
 }
 
 .panel-header {
@@ -213,50 +166,74 @@ input {
   align-items: center;
   justify-content: space-between;
 
-  gap: 12px;
+  gap: 20px;
 
-  margin-bottom: 18px;
+  margin-bottom: 22px;
 }
 
 .panel-header h2 {
   margin: 0;
+
+  font-size: 19px;
+  font-weight: 650;
+}
+
+.panel-description {
+  margin: 6px 0 0;
+
+  color: #858d9b;
+  font-size: 13px;
 }
 
 
-/* =========================
-   Forms
-========================= */
+/* =========================================================
+   Form
+   ========================================================= */
 
 .form-group {
-  margin-bottom: 16px;
+  margin-bottom: 18px;
 }
 
 .form-group label {
   display: block;
 
-  margin-bottom: 7px;
+  margin-bottom: 8px;
 
-  color: #b7bdc9;
+  color: #cbd2dc;
 
   font-size: 14px;
+  font-weight: 500;
 }
 
 .form-group input {
-  padding: 11px 12px;
+  width: 100%;
 
-  background: #101217;
+  height: 42px;
 
-  border: 1px solid #303641;
+  padding: 0 12px;
 
-  border-radius: 8px;
+  color: #e8ecf3;
+  background: #11161e;
 
-  color: #f2f2f2;
+  border: 1px solid #303947;
+  border-radius: 7px;
 
   outline: none;
+
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.form-group input::placeholder {
+  color: #596271;
 }
 
 .form-group input:focus {
-  border-color: #4f8cff;
+  border-color: #5f7fa8;
+
+  box-shadow:
+    0 0 0 3px rgba(95, 127, 168, 0.14);
 }
 
 .form-row {
@@ -268,109 +245,242 @@ input {
   gap: 16px;
 }
 
+.form-actions {
+  display: flex;
 
-/* =========================
+  align-items: center;
+  justify-content: flex-end;
+
+  gap: 10px;
+
+  margin-top: 6px;
+}
+
+
+/* =========================================================
    Buttons
-========================= */
+   ========================================================= */
 
 .primary-button,
-.secondary-button,
-.danger-button {
-  padding: 9px 14px;
+.secondary-button {
+  min-height: 38px;
 
-  border-radius: 8px;
+  padding: 0 15px;
 
+  border-radius: 7px;
+
+  font-size: 14px;
   font-weight: 500;
 
-  border: 1px solid transparent;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    opacity 0.15s ease;
 }
 
 .primary-button {
-  background: #4f8cff;
-  color: white;
+  color: #ffffff;
+
+  background: #3f73b8;
+
+  border: 1px solid #4a80c8;
 }
 
 .primary-button:hover {
-  opacity: 0.9;
+  background: #4a80c8;
 }
 
 .secondary-button {
-  background: #232831;
-  color: #e4e7ec;
+  color: #d5dbe4;
 
-  border-color: #353b46;
+  background: #202733;
+
+  border: 1px solid #343d4c;
 }
 
 .secondary-button:hover {
-  background: #2b313b;
+  background: #283140;
+  border-color: #414c5d;
 }
 
 .danger-button {
-  background: #351d21;
-  color: #ff8b8b;
-
-  border-color: #5a2c32;
+  color: #e5a3a3;
 }
 
 .danger-button:hover {
-  background: #462328;
+  background: #39272a;
+  border-color: #6a3d42;
+}
+
+.login-button {
+  width: 100%;
+
+  height: 44px;
+
+  margin-top: 4px;
+
+  color: #ffffff;
+
+  background: #3f73b8;
+
+  border: 1px solid #4a80c8;
+  border-radius: 7px;
+
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.login-button:hover {
+  background: #4a80c8;
 }
 
 
-/* =========================
-   Tasks
-========================= */
+/* =========================================================
+   Login error
+   ========================================================= */
+
+.login-error {
+  min-height: 20px;
+
+  margin-top: 12px;
+
+  color: #e58d8d;
+
+  font-size: 13px;
+  text-align: center;
+}
+
+
+/* =========================================================
+   Task list
+   ========================================================= */
+
+.tasks-container {
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 12px;
+}
 
 .task-card {
   display: flex;
 
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
 
-  gap: 20px;
+  gap: 24px;
 
-  padding: 16px;
+  padding: 18px;
 
-  margin-bottom: 12px;
+  background: #151b24;
 
-  background: #111419;
+  border: 1px solid #293240;
+  border-radius: 9px;
 
-  border: 1px solid #292e38;
-
-  border-radius: 10px;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
 }
 
-.task-card:last-child {
-  margin-bottom: 0;
+.task-card:hover {
+  border-color: #374354;
+  background: #171e28;
 }
 
-.task-info {
+.task-card-main {
   min-width: 0;
+
   flex: 1;
 }
 
-.task-url {
-  overflow-wrap: anywhere;
+
+/* =========================================================
+   Task title
+   ========================================================= */
+
+.task-title-row {
+  display: flex;
+
+  align-items: center;
+
+  gap: 9px;
+
+  min-width: 0;
 
   margin-bottom: 8px;
-
-  color: #f2f2f2;
-
-  font-weight: 500;
 }
+
+.task-id {
+  flex: 0 0 auto;
+
+  color: #738096;
+
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.task-name {
+  min-width: 0;
+
+  overflow: hidden;
+
+  color: #e8ecf3;
+
+  font-size: 16px;
+  font-weight: 600;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+
+/* =========================================================
+   Task URL
+   ========================================================= */
+
+.task-url {
+  max-width: 100%;
+
+  margin-bottom: 12px;
+
+  overflow: hidden;
+
+  color: #8f9bad;
+
+  font-size: 13px;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+
+/* =========================================================
+   Task metadata
+   ========================================================= */
 
 .task-meta {
   display: flex;
 
   flex-wrap: wrap;
 
-  gap: 12px;
+  align-items: center;
 
-  color: #858d9b;
+  gap: 8px 18px;
+
+  color: #a9b1bf;
 
   font-size: 13px;
 }
 
+.task-meta > span {
+  white-space: nowrap;
+}
+
+
+/*
+ * 保持原来的“运行中”绿色。
+ */
 .status-on {
   color: #62d68b;
 }
@@ -379,125 +489,406 @@ input {
   color: #858d9b;
 }
 
+
+/* =========================================================
+   Task extra information
+   ========================================================= */
+
+.task-extra {
+  display: flex;
+
+  flex-wrap: wrap;
+
+  gap: 7px 18px;
+
+  margin-top: 10px;
+
+  color: #687384;
+
+  font-size: 12px;
+}
+
+.task-extra > span {
+  white-space: nowrap;
+}
+
+
+/* =========================================================
+   Task actions
+   ========================================================= */
+
 .task-actions {
   display: flex;
 
-  flex-shrink: 0;
+  align-items: center;
+
+  justify-content: flex-end;
+
+  flex: 0 0 auto;
 
   gap: 8px;
+
+  padding-top: 2px;
 }
 
+.task-action-button {
+  min-width: 58px;
+}
+
+
+/* =========================================================
+   Empty state
+   ========================================================= */
+
 .empty-state {
-  padding: 30px;
+  padding: 42px 20px;
+
+  color: #687384;
 
   text-align: center;
 
-  color: #777f8d;
+  font-size: 14px;
+
+  border: 1px dashed #303947;
+  border-radius: 8px;
 }
 
 
-/* =========================
+/* =========================================================
    Logs
-========================= */
+   ========================================================= */
 
-.logs {
-  height: 360px;
+.logs-container {
+  height: 420px;
 
   overflow-y: auto;
 
-  padding: 12px;
+  padding: 8px;
 
-  background: #0c0e12;
+  background: #0e131a;
 
-  border: 1px solid #252a33;
-
+  border: 1px solid #252e3a;
   border-radius: 8px;
-
-  font-family:
-    Consolas,
-    "Courier New",
-    monospace;
-
-  font-size: 13px;
 }
 
-.log {
-  display: flex;
+.log-item {
+  display: grid;
 
-  gap: 12px;
+  grid-template-columns:
+    145px 55px minmax(0, 1fr);
 
-  padding: 5px 0;
+  gap: 10px;
 
-  line-height: 1.5;
+  padding: 7px 8px;
+
+  border-bottom: 1px solid #1d2530;
+
+  font-family:
+    "Cascadia Code",
+    "SFMono-Regular",
+    Consolas,
+    monospace;
+
+  font-size: 12px;
+
+  line-height: 1.6;
+}
+
+.log-item:last-child {
+  border-bottom: 0;
 }
 
 .log-time {
-  flex-shrink: 0;
+  color: #667184;
+}
 
-  color: #687180;
+.log-level {
+  color: #8590a1;
 }
 
 .log-message {
+  min-width: 0;
+
+  color: #bfc6d1;
+
+  white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
-.log-info {
-  color: #d7dbe2;
+.log-error .log-level {
+  color: #e58d8d;
 }
 
-.log-error {
-  color: #ff7474;
+.log-error .log-message {
+  color: #d99a9a;
 }
 
-.log-warn,
-.log-warning {
-  color: #e5bd63;
+.log-warn .log-level {
+  color: #d5b36b;
+}
+
+.log-warn .log-message {
+  color: #c8b17b;
+}
+
+.log-info .log-level {
+  color: #7e9dc3;
 }
 
 
-/* =========================
-   Mobile
-========================= */
+/* =========================================================
+   Modal
+   ========================================================= */
 
-@media (max-width: 700px) {
+.modal {
+  position: fixed;
 
-  .header {
-    padding: 16px;
+  inset: 0;
+
+  z-index: 1000;
+
+  display: flex;
+
+  align-items: center;
+  justify-content: center;
+
+  padding: 20px;
+}
+
+.modal-backdrop {
+  position: absolute;
+
+  inset: 0;
+
+  background: rgba(0, 0, 0, 0.62);
+}
+
+.modal-card {
+  position: relative;
+
+  z-index: 1;
+
+  width: 100%;
+  max-width: 620px;
+
+  max-height: calc(100vh - 40px);
+
+  overflow-y: auto;
+
+  padding: 24px;
+
+  background: #1a202a;
+
+  border: 1px solid #303947;
+  border-radius: 12px;
+
+  box-shadow:
+    0 24px 70px rgba(0, 0, 0, 0.45);
+}
+
+.modal-header {
+  display: flex;
+
+  align-items: flex-start;
+  justify-content: space-between;
+
+  gap: 20px;
+
+  margin-bottom: 22px;
+}
+
+.modal-header h2 {
+  margin: 0;
+
+  font-size: 19px;
+  font-weight: 650;
+}
+
+.modal-close-button {
+  width: 34px;
+  height: 34px;
+
+  flex: 0 0 auto;
+
+  padding: 0;
+
+  color: #9ca6b5;
+
+  background: transparent;
+
+  border: 1px solid transparent;
+  border-radius: 6px;
+
+  font-size: 25px;
+  line-height: 1;
+}
+
+.modal-close-button:hover {
+  color: #e8ecf3;
+
+  background: #252d38;
+
+  border-color: #343d4c;
+}
+
+.modal-actions {
+  margin-top: 20px;
+}
+
+
+/* =========================================================
+   Responsive
+   ========================================================= */
+
+@media (max-width: 760px) {
+
+  .container,
+  .header-inner {
+    width: min(
+      100% - 20px,
+      1200px
+    );
   }
 
   .container {
-    padding: 16px;
+    padding-top: 18px;
   }
 
   .panel {
-    padding: 16px;
-  }
+    padding: 18px;
 
-  .form-row {
-    grid-template-columns: 1fr;
-    gap: 0;
-  }
-
-  .task-card {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .task-actions {
-    width: 100%;
-  }
-
-  .task-actions button {
-    flex: 1;
+    margin-bottom: 16px;
   }
 
   .panel-header {
     align-items: flex-start;
   }
 
-  .login-card {
-    padding: 24px;
+  .form-row {
+    grid-template-columns: 1fr;
+
+    gap: 0;
+  }
+
+  .task-card {
+    flex-direction: column;
+
+    gap: 16px;
+  }
+
+  .task-actions {
+    width: 100%;
+
+    justify-content: flex-start;
+
+    flex-wrap: wrap;
+  }
+
+  .task-action-button {
+    flex: 1 1 auto;
+  }
+
+  .logs-container {
+    height: 360px;
+  }
+
+  .log-item {
+    grid-template-columns:
+      115px 45px minmax(0, 1fr);
+
+    gap: 7px;
+
+    font-size: 11px;
   }
 
 }
-```
+
+
+@media (max-width: 520px) {
+
+  .login-card {
+    padding: 24px 20px;
+  }
+
+  .header-inner {
+    min-height: 68px;
+  }
+
+  .header-inner h1 {
+    font-size: 21px;
+  }
+
+  .header-subtitle {
+    display: none;
+  }
+
+  .panel-header {
+    flex-direction: column;
+  }
+
+  .panel-header > .secondary-button {
+    width: 100%;
+  }
+
+  .task-meta,
+  .task-extra {
+    flex-direction: column;
+
+    align-items: flex-start;
+
+    gap: 6px;
+  }
+
+  .task-actions {
+    display: grid;
+
+    grid-template-columns:
+      repeat(3, minmax(0, 1fr));
+
+    width: 100%;
+  }
+
+  .task-action-button {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .modal {
+    padding: 10px;
+  }
+
+  .modal-card {
+    max-height: calc(100vh - 20px);
+
+    padding: 18px;
+  }
+
+  .modal-actions {
+    display: grid;
+
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+
+  .modal-actions button {
+    width: 100%;
+  }
+
+  .log-item {
+    display: block;
+
+    padding: 8px;
+  }
+
+  .log-time,
+  .log-level {
+    margin-right: 8px;
+  }
+
+  .log-message {
+    display: block;
+
+    margin-top: 2px;
+  }
+
+}
