@@ -4,144 +4,251 @@
 name="viewport"
 content="width=device-width, initial-scale=1.0"
 
-<title>Remain</title> <link rel="stylesheet" href="/style.css" > </head> <body> <div class="container">
-<header class="header">
-  <div>
+<title>Remain</title> <link rel="stylesheet" href="/style.css" > </head> <body> <!-- ========================= Login ========================= --> <div id="login-page" class="login-page" >
+<div class="login-card">
+
+  <div class="login-header">
+
     <h1>Remain</h1>
-    <p>定时保持网页活跃</p>
+
+    <p>
+      定时保持网页活跃
+    </p>
+
   </div>
-</header>
 
 
-<!-- 添加任务 -->
-<section class="panel">
+  <form id="login-form">
 
-  <h2>添加任务</h2>
+    <label for="login-password">
 
-  <form id="taskForm">
-
-    <label for="url">
-      网页 URL
+      管理密码
 
       <input
-        id="url"
-        name="url"
-        type="url"
-        placeholder="https://example.com"
+        id="login-password"
+        type="password"
+        placeholder="请输入密码"
+        autocomplete="current-password"
         required
       >
+
     </label>
-
-
-    <div class="row">
-
-      <label for="interval">
-        访问间隔（分钟）
-
-        <input
-          id="interval"
-          name="interval"
-          type="number"
-          min="1"
-          value="5"
-          required
-        >
-      </label>
-
-
-      <label for="stay">
-        停留时间（秒）
-
-        <input
-          id="stay"
-          name="stay"
-          type="number"
-          min="0"
-          value="10"
-          required
-        >
-      </label>
-
-    </div>
 
 
     <button
       type="submit"
+      class="login-button"
     >
-      添加任务
+      登录
     </button>
+
+
+    <div
+      id="login-error"
+      class="login-error"
+    ></div>
 
   </form>
 
-</section>
+</div>
+
+</div> <!-- ========================= Main Application ========================= --> <div id="app-page" class="app-page hidden" >
+<div class="container">
 
 
-<!-- 任务 -->
-<section class="panel">
+  <!-- Header -->
 
-  <div class="section-header">
-
-    <div>
-      <h2>任务</h2>
-    </div>
-
-    <button
-      id="refresh-button"
-      type="button"
-    >
-      刷新
-    </button>
-
-  </div>
-
-
-  <div id="tasks">
-
-    <div class="empty">
-      暂时没有任务
-    </div>
-
-  </div>
-
-</section>
-
-
-<!-- 运行日志 -->
-<section class="panel logs-section">
-
-  <div class="section-header">
+  <header class="header">
 
     <div>
 
-      <h2>运行日志</h2>
+      <h1>Remain</h1>
 
-      <p class="section-description">
-        实时显示 Scheduler 和浏览器运行状态
+      <p>
+        定时保持网页活跃
       </p>
 
     </div>
 
+
     <button
-      id="clear-logs-button"
+      id="logout-button"
       type="button"
+      class="secondary-button"
     >
-      清空显示
+      退出登录
     </button>
 
-  </div>
+  </header>
 
 
-  <div
-    id="logs"
-    class="logs"
-  >
 
-    <div class="log-empty">
-      等待日志...
+  <!-- =========================
+       添加任务
+       ========================= -->
+
+  <section class="panel">
+
+    <h2>添加任务</h2>
+
+
+    <form id="taskForm">
+
+
+      <label for="url">
+
+        网页 URL
+
+        <input
+          id="url"
+          name="url"
+          type="url"
+          placeholder="https://example.com"
+          required
+        >
+
+      </label>
+
+
+      <div class="row">
+
+
+        <label for="interval">
+
+          访问间隔（分钟）
+
+          <input
+            id="interval"
+            name="interval"
+            type="number"
+            min="1"
+            value="5"
+            required
+          >
+
+        </label>
+
+
+        <label for="stay">
+
+          停留时间（秒）
+
+          <input
+            id="stay"
+            name="stay"
+            type="number"
+            min="0"
+            value="10"
+            required
+          >
+
+        </label>
+
+
+      </div>
+
+
+      <button
+        type="submit"
+      >
+        添加任务
+      </button>
+
+
+    </form>
+
+  </section>
+
+
+
+  <!-- =========================
+       任务列表
+       ========================= -->
+
+  <section class="panel">
+
+
+    <div class="section-header">
+
+
+      <div>
+
+        <h2>任务</h2>
+
+      </div>
+
+
+      <button
+        id="refresh-button"
+        type="button"
+      >
+        刷新
+      </button>
+
+
     </div>
 
-  </div>
 
-</section>
+    <div id="tasks">
+
+      <div class="empty">
+        暂时没有任务
+      </div>
+
+    </div>
+
+
+  </section>
+
+
+
+  <!-- =========================
+       运行日志
+       ========================= -->
+
+  <section class="panel logs-section">
+
+
+    <div class="section-header">
+
+
+      <div>
+
+        <h2>运行日志</h2>
+
+        <p class="section-description">
+          实时显示 Scheduler 和浏览器运行状态
+        </p>
+
+      </div>
+
+
+      <button
+        id="clear-logs-button"
+        type="button"
+      >
+        清空显示
+      </button>
+
+
+    </div>
+
+
+    <div
+      id="logs"
+      class="logs"
+    >
+
+      <div class="log-empty">
+        等待日志...
+      </div>
+
+    </div>
+
+
+  </section>
+
+
+</div>
 
 </div> <script src="/app.js"></script> </body> </html>
