@@ -1,11 +1,12 @@
 const Database = require("better-sqlite3");
 const fs = require("fs");
 const path = require("path");
-const { spawnSync, execFile } = require("child_process");
+const { spawnSync, execFileSync, execFile } = require("child_process");
 
 const dataDir = process.env.DATA_DIR || "/tmp/remain-data";
 const dbPath = path.join(dataDir, "app.db");
 const tempBackupPath = path.join(dataDir, "app-backup.sqlite");
+const rcloneConfigPath = path.join(dataDir, "rclone.conf");
 
 const remoteFolder = process.env.REMOTE_FOLDER || "";
 const rcloneConf = process.env.RCLONE_CONF || "";
@@ -26,22 +27,40 @@ function isRcloneAvailable() {
   }
 }
 
-function getRcloneEnvironment() {
+function prepareRcloneConfig() {
   if (!rcloneConf) {
-    return null;
+    return false;
   }
 
-  return {
-    ...process.env,
-    RCLONE_CONFIG: rcloneConf
-  };
+  try {
+    fs.writeFileSync(
+      rcloneConfigPath,
+      rcloneConf,
+      {
+        encoding: "utf8",
+        mode: 0o600
+      }
+    );
+
+    return true;
+  } catch (error) {
+    console.log("[Database] rclone 配置文件创建失败");
+    return false;
+  }
 }
 
-/*
- * 启动恢复必须同步完成。
- * 这样 server.js / scheduler.js 开始运行时，
- * SQLite 数据库一定已经初始化完成。
- */
+function getRemoteDatabasePath() {
+  return `${remoteFolder.replace(/\/+$/, "")}/app.db`;
+}
+
+function removeFile(filePath) {
+  try {
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+  } catch (error) {}
+}
+
 function restoreDatabaseSync() {
   if (fs.existsSync(dbPath)) {
     return false;
@@ -62,41 +81,35 @@ function restoreDatabaseSync() {
     return false;
   }
 
+  if (!prepareRcloneConfig()) {
+    return false;
+  }
+
   const restorePath = `${dbPath}.restore`;
+  removeFile(restorePath);
 
   try {
-    if (fs.existsSync(restorePath)) {
-      fs.unlinkSync(restorePath);
-    }
-
     console.log("[Database] 正在从云端恢复数据库...");
 
-    const env = getRcloneEnvironment();
-
-    const result = spawnSync(
+    execFileSync(
       "rclone",
       [
+        "--config",
+        rcloneConfigPath,
         "copyto",
-        remoteFolder,
+        getRemoteDatabasePath(),
         restorePath
       ],
       {
-        env,
         stdio: "ignore"
       }
     );
-
-    if (result.error || result.status !== 0) {
-      console.log("[Database] 云端没有可用数据库备份");
-      return false;
-    }
 
     if (!fs.existsSync(restorePath)) {
       console.log("[Database] 云端没有可用数据库备份");
       return false;
     }
 
-    // 验证恢复出来的文件确实是可用的 SQLite 数据库
     let testDb = null;
 
     try {
@@ -124,38 +137,28 @@ function restoreDatabaseSync() {
 
     return true;
   } catch (error) {
-    console.log("[Database] 云端数据库恢复失败，创建新数据库");
+    console.log("[Database] 云端没有可用数据库备份");
     return false;
   } finally {
-    try {
-      if (fs.existsSync(restorePath)) {
-        fs.unlinkSync(restorePath);
-      }
-    } catch (error) {}
+    removeFile(restorePath);
   }
 }
 
 function removeOldBackupFile() {
-  try {
-    if (fs.existsSync(tempBackupPath)) {
-      fs.unlinkSync(tempBackupPath);
-      console.log("[Database] 已清理旧的临时备份文件");
-    }
-  } catch (error) {
-    console.log("[Database] 清理临时备份文件失败");
+  if (fs.existsSync(tempBackupPath)) {
+    removeFile(tempBackupPath);
   }
 }
+
+let db;
+let backupRunning = false;
 
 function backupDatabase() {
   if (backupRunning) {
     return;
   }
 
-  if (!remoteFolder) {
-    return;
-  }
-
-  if (!rcloneConf) {
+  if (!remoteFolder || !rcloneConf) {
     return;
   }
 
@@ -178,18 +181,21 @@ function backupDatabase() {
         throw new Error("数据库备份文件未生成");
       }
 
-      const env = getRcloneEnvironment();
+      if (!prepareRcloneConfig()) {
+        throw new Error("rclone 配置失败");
+      }
 
       await new Promise((resolve, reject) => {
         execFile(
           "rclone",
           [
+            "--config",
+            rcloneConfigPath,
             "copyto",
             tempBackupPath,
-            remoteFolder
+            getRemoteDatabasePath()
           ],
           {
-            env,
             windowsHide: true
           },
           error => {
@@ -206,26 +212,14 @@ function backupDatabase() {
       console.log("[Database] 数据库备份成功");
 
       // 上传成功后立即删除本地临时备份
-      try {
-        if (fs.existsSync(tempBackupPath)) {
-          fs.unlinkSync(tempBackupPath);
-        }
+      removeOldBackupFile();
 
-        console.log("[Database] 已删除本地临时备份");
-      } catch (error) {
-        console.log("[Database] 删除本地临时备份失败");
-      }
+      console.log("[Database] 已删除本地临时备份");
     } catch (error) {
       console.log("[Database] 数据库备份失败");
 
-      // 防止临时文件残留
-      try {
-        if (fs.existsSync(tempBackupPath)) {
-          fs.unlinkSync(tempBackupPath);
-        }
-      } catch (cleanupError) {
-        console.log("[Database] 清理临时备份失败");
-      }
+      // 即使失败，也不长期保留临时备份
+      removeOldBackupFile();
     } finally {
       backupRunning = false;
     }
@@ -235,10 +229,8 @@ function backupDatabase() {
 
 /*
  * ============================
- * 数据库启动初始化
+ * 数据库启动
  * ============================
- *
- * 这里必须同步完成。
  */
 
 removeOldBackupFile();
@@ -249,10 +241,11 @@ if (!fs.existsSync(dbPath)) {
 
 
 /*
- * 如果云端没有备份，
+ * 云端没有备份时，
  * better-sqlite3 会在这里创建新的 app.db。
  */
-const db = new Database(dbPath);
+
+db = new Database(dbPath);
 
 db.pragma("journal_mode = WAL");
 
@@ -274,10 +267,12 @@ db.exec(`
 
 
 /*
- * 兼容旧数据库。
- * 如果以前没有 name 字段，就自动添加。
+ * 兼容旧数据库
  */
-const columns = db.prepare("PRAGMA table_info(tasks)").all();
+
+const columns = db
+  .prepare("PRAGMA table_info(tasks)")
+  .all();
 
 const hasNameColumn = columns.some(
   column => column.name === "name"
@@ -294,12 +289,8 @@ if (!hasNameColumn) {
 
 
 /*
- * ============================
- * 每 6 小时自动备份
- * ============================
+ * 每 6 小时备份一次
  */
-
-let backupRunning = false;
 
 setInterval(() => {
   backupDatabase();
@@ -396,7 +387,12 @@ function updateTask(id, fields) {
   const values = [];
 
   for (const field of allowedFields) {
-    if (Object.prototype.hasOwnProperty.call(fields, field)) {
+    if (
+      Object.prototype.hasOwnProperty.call(
+        fields,
+        field
+      )
+    ) {
       updates.push(`${field} = ?`);
       values.push(fields[field]);
     }
