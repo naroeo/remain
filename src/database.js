@@ -1,463 +1,578 @@
 const Database = require("better-sqlite3");
 const fs = require("fs");
 const path = require("path");
-const { spawnSync, execFileSync, execFile } = require("child_process");
+const { execFileSync } = require("child_process");
 
 const dataDir = process.env.DATA_DIR || "/tmp/remain-data";
 const dbPath = path.join(dataDir, "app.db");
-const tempBackupPath = path.join(dataDir, "app-backup.sqlite");
+
+const backupPath = path.join(dataDir, "app-backup.sqlite");
+const restoreDir = path.join(dataDir, "restore");
 const rcloneConfigPath = path.join(dataDir, "rclone.conf");
 
-const remoteFolder = process.env.REMOTE_FOLDER || "";
+const remoteFolder = (process.env.REMOTE_FOLDER || "").replace(/\/+$/, "");
 const rcloneConf = process.env.RCLONE_CONF || "";
+
+const BACKUP_INTERVAL = 6 * 60 * 60 * 1000;
+
+let db = null;
+let backupRunning = false;
+
+
+/* =========================================================
+   基础目录
+   ========================================================= */
 
 fs.mkdirSync(dataDir, { recursive: true });
 
-console.log(`[Database] ${dbPath}`);
 
-function isRcloneAvailable() {
-  try {
-    const result = spawnSync("rclone", ["version"], {
-      stdio: "ignore"
-    });
-
-    return result.status === 0;
-  } catch (error) {
-    return false;
-  }
-}
+/* =========================================================
+   rclone 配置
+   RCLONE_CONF 是完整配置内容
+   ========================================================= */
 
 function prepareRcloneConfig() {
-  if (!rcloneConf) {
+  if (!rcloneConf.trim()) {
     return false;
   }
 
-  try {
-    fs.writeFileSync(
-      rcloneConfigPath,
-      rcloneConf,
-      {
-        encoding: "utf8",
-        mode: 0o600
-      }
-    );
+  fs.writeFileSync(
+    rcloneConfigPath,
+    rcloneConf,
+    {
+      encoding: "utf8",
+      mode: 0o600
+    }
+  );
 
-    return true;
-  } catch (error) {
-    console.log("[Database] rclone 配置文件创建失败");
-    return false;
-  }
+  return true;
 }
 
-function getRemoteDatabasePath() {
-  return `${remoteFolder.replace(/\/+$/, "")}/app.db`;
-}
+
+/* =========================================================
+   删除文件 / 目录
+   ========================================================= */
 
 function removeFile(filePath) {
   try {
     if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
+      fs.rmSync(filePath, {
+        recursive: true,
+        force: true
+      });
     }
-  } catch (error) {}
+  } catch (error) {
+    console.error(
+      `[Database] 删除文件失败：${filePath}`,
+      error.message
+    );
+  }
 }
 
-function restoreDatabaseSync() {
-  if (fs.existsSync(dbPath)) {
-    return false;
-  }
+
+/* =========================================================
+   从云端恢复数据库
+   ========================================================= */
+
+function restoreDatabase() {
+  console.log("[Database] 正在从云端恢复数据库...");
 
   if (!remoteFolder) {
-    console.log("[Database] 未配置 REMOTE_FOLDER，创建新数据库");
+    console.log("[Database] 未配置 REMOTE_FOLDER");
     return false;
   }
 
-  if (!rcloneConf) {
-    console.log("[Database] 未配置 RCLONE_CONF，创建新数据库");
+  if (!rcloneConf.trim()) {
+    console.log("[Database] 未配置 RCLONE_CONF");
     return false;
   }
-
-  if (!isRcloneAvailable()) {
-    console.log("[Database] rclone 不可用，创建新数据库");
-    return false;
-  }
-
-  if (!prepareRcloneConfig()) {
-    return false;
-  }
-
-  const restorePath = `${dbPath}.restore`;
-  removeFile(restorePath);
 
   try {
-    console.log("[Database] 正在从云端恢复数据库...");
+    prepareRcloneConfig();
 
+    // 清理上一次可能残留的恢复目录
+    removeFile(restoreDir);
+
+    fs.mkdirSync(restoreDir, {
+      recursive: true
+    });
+
+    /*
+     * 标准 rclone copy：
+     *
+     * 云端：
+     * huggingface:like/
+     *
+     * ↓
+     *
+     * 本地：
+     * /tmp/remain-data/restore/
+     *
+     * 最终得到：
+     * /tmp/remain-data/restore/app-backup.sqlite
+     */
     execFileSync(
       "rclone",
       [
         "--config",
         rcloneConfigPath,
-        "copyto",
-        getRemoteDatabasePath(),
-        restorePath
+        "copy",
+        remoteFolder,
+        restoreDir
       ],
       {
-        stdio: "ignore"
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"]
       }
     );
 
-    if (!fs.existsSync(restorePath)) {
+    const restoredBackupPath = path.join(
+      restoreDir,
+      "app-backup.sqlite"
+    );
+
+    if (!fs.existsSync(restoredBackupPath)) {
       console.log("[Database] 云端没有可用数据库备份");
+      removeFile(restoreDir);
       return false;
     }
 
-    let testDb = null;
+    /*
+     * 先删除当前数据库。
+     * 正常情况下启动时这里还不存在。
+     */
+    removeFile(dbPath);
 
-    try {
-      testDb = new Database(restorePath, {
-        readonly: true
-      });
+    // 将恢复出来的数据库变成正式 app.db
+    fs.renameSync(
+      restoredBackupPath,
+      dbPath
+    );
 
-      testDb
-        .prepare("SELECT name FROM sqlite_master LIMIT 1")
-        .get();
-    } catch (error) {
-      console.log("[Database] 云端数据库文件无效，创建新数据库");
-      return false;
-    } finally {
-      if (testDb) {
-        try {
-          testDb.close();
-        } catch (error) {}
-      }
-    }
+    removeFile(restoreDir);
 
-    fs.renameSync(restorePath, dbPath);
-
-    console.log("[Database] 数据库恢复成功");
+    console.log("[Database] 云端数据库恢复完成");
 
     return true;
+
   } catch (error) {
-    console.log("[Database] 云端没有可用数据库备份");
+    console.error(
+      "[Database] 云端数据库恢复失败，创建新数据库"
+    );
+
+    if (error.stderr) {
+      console.error(
+        `[Database] rclone：${error.stderr.toString().trim()}`
+      );
+    } else if (error.message) {
+      console.error(
+        `[Database] ${error.message}`
+      );
+    }
+
+    removeFile(restoreDir);
+
     return false;
-  } finally {
-    removeFile(restorePath);
   }
 }
 
-function removeOldBackupFile() {
-  if (fs.existsSync(tempBackupPath)) {
-    removeFile(tempBackupPath);
+
+/* =========================================================
+   初始化数据库
+   ========================================================= */
+
+function initializeDatabase() {
+  console.log(`[Database] ${dbPath}`);
+
+  /*
+   * 非常重要：
+   * 必须先恢复，再打开 SQLite。
+   * 避免 Render 启动时出现 db 尚未初始化的问题。
+   */
+  restoreDatabase();
+
+  db = new Database(dbPath);
+
+  db.pragma("journal_mode = WAL");
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS tasks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      url TEXT NOT NULL,
+      stay_seconds INTEGER NOT NULL DEFAULT 40,
+      interval_minutes INTEGER NOT NULL DEFAULT 60,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      visit_count INTEGER NOT NULL DEFAULT 0,
+      last_visit TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
+  /*
+   * 兼容旧数据库：
+   * 如果之前的数据库缺少某些字段，就补上。
+   */
+
+  const columns = db
+    .prepare("PRAGMA table_info(tasks)")
+    .all()
+    .map(row => row.name);
+
+  if (!columns.includes("stay_seconds")) {
+    db.exec(`
+      ALTER TABLE tasks
+      ADD COLUMN stay_seconds INTEGER NOT NULL DEFAULT 40
+    `);
   }
+
+  if (!columns.includes("interval_minutes")) {
+    db.exec(`
+      ALTER TABLE tasks
+      ADD COLUMN interval_minutes INTEGER NOT NULL DEFAULT 60
+    `);
+  }
+
+  if (!columns.includes("enabled")) {
+    db.exec(`
+      ALTER TABLE tasks
+      ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1
+    `);
+  }
+
+  if (!columns.includes("visit_count")) {
+    db.exec(`
+      ALTER TABLE tasks
+      ADD COLUMN visit_count INTEGER NOT NULL DEFAULT 0
+    `);
+  }
+
+  if (!columns.includes("last_visit")) {
+    db.exec(`
+      ALTER TABLE tasks
+      ADD COLUMN last_visit TEXT
+    `);
+  }
+
+  if (!columns.includes("created_at")) {
+    db.exec(`
+      ALTER TABLE tasks
+      ADD COLUMN created_at TEXT
+    `);
+  }
+
+  console.log("[Database] SQLite 初始化完成");
+
+  return db;
 }
 
-let db;
-let backupRunning = false;
 
-function backupDatabase() {
+/* =========================================================
+   数据库备份
+   ========================================================= */
+
+async function backupDatabase() {
   if (backupRunning) {
+    console.log("[Database] 上一次备份还未完成，跳过本次备份");
     return;
   }
 
-  if (!remoteFolder || !rcloneConf) {
+  if (!db) {
+    console.log("[Database] 数据库尚未初始化，跳过备份");
     return;
   }
 
-  if (!isRcloneAvailable()) {
-    console.log("[Database] rclone 不可用，跳过数据库备份");
+  if (!remoteFolder) {
+    console.log("[Database] 未配置 REMOTE_FOLDER，跳过备份");
+    return;
+  }
+
+  if (!rcloneConf.trim()) {
+    console.log("[Database] 未配置 RCLONE_CONF，跳过备份");
     return;
   }
 
   backupRunning = true;
 
-  (async () => {
-    try {
-      removeOldBackupFile();
+  try {
+    console.log("[Database] 开始数据库备份");
 
-      console.log("[Database] 开始备份数据库");
+    prepareRcloneConfig();
 
-      await db.backup(tempBackupPath);
+    /*
+     * 使用 SQLite 官方 backup API 创建临时备份。
+     *
+     * 本地：
+     * /tmp/remain-data/app-backup.sqlite
+     */
+    removeFile(backupPath);
 
-      if (!fs.existsSync(tempBackupPath)) {
-        throw new Error("数据库备份文件未生成");
-      }
+    await db.backup(backupPath);
 
-      if (!prepareRcloneConfig()) {
-        throw new Error("rclone 配置失败");
-      }
-
-      await new Promise((resolve, reject) => {
-        execFile(
-          "rclone",
-          [
-            "--config",
-            rcloneConfigPath,
-            "copyto",
-            tempBackupPath,
-            getRemoteDatabasePath()
-          ],
-          {
-            windowsHide: true
-          },
-          error => {
-            if (error) {
-              reject(error);
-              return;
-            }
-
-            resolve();
-          }
-        );
-      });
-
-      console.log("[Database] 数据库备份成功");
-
-      // 上传成功后立即删除本地临时备份
-      removeOldBackupFile();
-
-      console.log("[Database] 已删除本地临时备份");
-    } catch (error) {
-      console.log("[Database] 数据库备份失败");
-
-      // 即使失败，也不长期保留临时备份
-      removeOldBackupFile();
-    } finally {
-      backupRunning = false;
+    if (!fs.existsSync(backupPath)) {
+      throw new Error("数据库备份文件未生成");
     }
-  })();
+
+    console.log("[Database] 本地备份文件生成完成");
+
+    /*
+     * 标准 rclone copy：
+     *
+     * /tmp/remain-data/app-backup.sqlite
+     *              ↓
+     * huggingface:like/
+     *
+     * 云端最终：
+     * huggingface:like/app-backup.sqlite
+     */
+    execFileSync(
+      "rclone",
+      [
+        "--config",
+        rcloneConfigPath,
+        "copy",
+        backupPath,
+        remoteFolder
+      ],
+      {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"]
+      }
+    );
+
+    console.log("[Database] 数据库已上传到云端");
+
+  } catch (error) {
+    console.error(
+      "[Database] 数据库备份失败：",
+      error.message
+    );
+
+    if (error.stderr) {
+      console.error(
+        `[Database] rclone：${error.stderr.toString().trim()}`
+      );
+    }
+
+  } finally {
+    /*
+     * 无论成功还是失败，
+     * 都删除临时数据库备份文件。
+     */
+    removeFile(backupPath);
+
+    backupRunning = false;
+
+    console.log("[Database] 本地临时备份已清理");
+  }
 }
 
 
-/*
- * ============================
- * 数据库启动
- * ============================
- */
+/* =========================================================
+   每 6 小时自动备份
+   ========================================================= */
 
-removeOldBackupFile();
+function startDatabaseBackupScheduler() {
+  setInterval(() => {
+    backupDatabase().catch(error => {
+      console.error(
+        "[Database] 自动备份异常：",
+        error.message
+      );
+    });
+  }, BACKUP_INTERVAL);
 
-if (!fs.existsSync(dbPath)) {
-  restoreDatabaseSync();
+  console.log("[Database] 数据库自动备份已启动：每 6 小时一次");
 }
 
 
-/*
- * 云端没有备份时，
- * better-sqlite3 会在这里创建新的 app.db。
- */
+/* =========================================================
+   初始化
+   ========================================================= */
 
-db = new Database(dbPath);
+initializeDatabase();
 
-db.pragma("journal_mode = WAL");
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS tasks (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL DEFAULT '',
-    url TEXT NOT NULL,
-    interval_minutes INTEGER NOT NULL DEFAULT 5,
-    stay_seconds INTEGER NOT NULL DEFAULT 10,
-    enabled INTEGER NOT NULL DEFAULT 0,
-    visit_count INTEGER NOT NULL DEFAULT 0,
-    last_visit TEXT,
-    next_visit TEXT,
-    last_status TEXT,
-    created_at TEXT NOT NULL
-  )
-`);
+startDatabaseBackupScheduler();
 
 
-/*
- * 兼容旧数据库
- */
-
-const columns = db
-  .prepare("PRAGMA table_info(tasks)")
-  .all();
-
-const hasNameColumn = columns.some(
-  column => column.name === "name"
-);
-
-if (!hasNameColumn) {
-  db.exec(`
-    ALTER TABLE tasks
-    ADD COLUMN name TEXT NOT NULL DEFAULT ''
-  `);
-
-  console.log("[Database] 已添加 tasks.name 字段");
-}
-
-
-/*
- * 每 6 小时备份一次
- */
-
-setInterval(() => {
-  backupDatabase();
-}, 6 * 60 * 60 * 1000);
-
-
-/*
- * ============================
- * Tasks
- * ============================
- */
+/* =========================================================
+   Tasks API
+   ========================================================= */
 
 function getTasks() {
-  return db.prepare(`
-    SELECT
-      id,
-      name,
-      url,
-      interval_minutes,
-      stay_seconds,
-      enabled,
-      visit_count,
-      last_visit,
-      next_visit,
-      last_status,
-      created_at
-    FROM tasks
-    ORDER BY id ASC
-  `).all();
+  return db
+    .prepare(`
+      SELECT
+        id,
+        name,
+        url,
+        stay_seconds,
+        interval_minutes,
+        enabled,
+        visit_count,
+        last_visit,
+        created_at
+      FROM tasks
+      ORDER BY id ASC
+    `)
+    .all();
 }
+
 
 function getTask(id) {
-  return db.prepare(`
-    SELECT
-      id,
-      name,
-      url,
-      interval_minutes,
-      stay_seconds,
-      enabled,
-      visit_count,
-      last_visit,
-      next_visit,
-      last_status,
-      created_at
-    FROM tasks
-    WHERE id = ?
-  `).get(id);
+  return db
+    .prepare(`
+      SELECT
+        id,
+        name,
+        url,
+        stay_seconds,
+        interval_minutes,
+        enabled,
+        visit_count,
+        last_visit,
+        created_at
+      FROM tasks
+      WHERE id = ?
+    `)
+    .get(id);
 }
 
-function createTask(
+
+function createTask({
   name,
   url,
-  intervalMinutes,
-  staySeconds
-) {
-  const createdAt = new Date().toISOString();
-
-  const result = db.prepare(`
-    INSERT INTO tasks (
+  stay_seconds = 40,
+  interval_minutes = 60,
+  enabled = 1
+}) {
+  const result = db
+    .prepare(`
+      INSERT INTO tasks (
+        name,
+        url,
+        stay_seconds,
+        interval_minutes,
+        enabled
+      )
+      VALUES (?, ?, ?, ?, ?)
+    `)
+    .run(
       name,
       url,
-      interval_minutes,
-      stay_seconds,
-      enabled,
-      visit_count,
-      last_visit,
-      next_visit,
-      last_status,
-      created_at
-    )
-    VALUES (?, ?, ?, ?, 0, 0, NULL, NULL, NULL, ?)
-  `).run(
-    name,
-    url,
-    intervalMinutes,
-    staySeconds,
-    createdAt
-  );
+      Number(stay_seconds),
+      Number(interval_minutes),
+      enabled ? 1 : 0
+    );
 
   return getTask(result.lastInsertRowid);
 }
 
-function updateTask(id, fields) {
-  const allowedFields = [
-    "name",
-    "url",
-    "interval_minutes",
-    "stay_seconds",
-    "enabled"
-  ];
 
-  const updates = [];
-  const values = [];
-
-  for (const field of allowedFields) {
-    if (
-      Object.prototype.hasOwnProperty.call(
-        fields,
-        field
-      )
-    ) {
-      updates.push(`${field} = ?`);
-      values.push(fields[field]);
-    }
+function updateTask(
+  id,
+  {
+    name,
+    url,
+    stay_seconds,
+    interval_minutes,
+    enabled
   }
+) {
+  const oldTask = getTask(id);
 
-  if (updates.length === 0) {
-    return getTask(id);
-  }
-
-  values.push(id);
-
-  db.prepare(`
-    UPDATE tasks
-    SET ${updates.join(", ")}
-    WHERE id = ?
-  `).run(...values);
-
-  return getTask(id);
-}
-
-function recordVisit(id, status) {
-  const now = new Date();
-  const nowIso = now.toISOString();
-
-  const task = getTask(id);
-
-  if (!task) {
+  if (!oldTask) {
     return null;
   }
 
-  const nextVisit = new Date(
-    now.getTime() +
-    task.interval_minutes * 60 * 1000
-  ).toISOString();
+  const newName =
+    name !== undefined
+      ? name
+      : oldTask.name;
 
-  db.prepare(`
-    UPDATE tasks
-    SET
-      visit_count = visit_count + 1,
-      last_visit = ?,
-      next_visit = ?,
-      last_status = ?
-    WHERE id = ?
-  `).run(
-    nowIso,
-    nextVisit,
-    status,
-    id
-  );
+  const newUrl =
+    url !== undefined
+      ? url
+      : oldTask.url;
+
+  const newStaySeconds =
+    stay_seconds !== undefined
+      ? Number(stay_seconds)
+      : oldTask.stay_seconds;
+
+  const newIntervalMinutes =
+    interval_minutes !== undefined
+      ? Number(interval_minutes)
+      : oldTask.interval_minutes;
+
+  const newEnabled =
+    enabled !== undefined
+      ? (enabled ? 1 : 0)
+      : oldTask.enabled;
+
+  db
+    .prepare(`
+      UPDATE tasks
+      SET
+        name = ?,
+        url = ?,
+        stay_seconds = ?,
+        interval_minutes = ?,
+        enabled = ?
+      WHERE id = ?
+    `)
+    .run(
+      newName,
+      newUrl,
+      newStaySeconds,
+      newIntervalMinutes,
+      newEnabled,
+      id
+    );
 
   return getTask(id);
 }
 
+
 function deleteTask(id) {
-  return db.prepare(`
-    DELETE FROM tasks
-    WHERE id = ?
-  `).run(id);
+  const result = db
+    .prepare(`
+      DELETE FROM tasks
+      WHERE id = ?
+    `)
+    .run(id);
+
+  return result.changes > 0;
 }
 
+
+function recordVisit(id) {
+  db
+    .prepare(`
+      UPDATE tasks
+      SET
+        visit_count = visit_count + 1,
+        last_visit = ?
+      WHERE id = ?
+    `)
+    .run(
+      new Date().toISOString(),
+      id
+    );
+}
+
+
+/* =========================================================
+   导出
+   ========================================================= */
+
 module.exports = {
+  db,
   getTasks,
   getTask,
   createTask,
   updateTask,
+  deleteTask,
   recordVisit,
-  deleteTask
+  backupDatabase
 };
