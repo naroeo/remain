@@ -199,8 +199,11 @@ app.post(
           stay
         );
 
+      /*
+       * 不在日志中显示 URL
+       */
       addLog(
-        `创建任务 #${task.id}：${task.url}`
+        `创建任务 #${task.id}`
       );
 
       res.json(task);
@@ -271,8 +274,11 @@ app.post(
         updatedTask ||
         getTask(id);
 
+      /*
+       * 不在日志中显示 URL
+       */
       addLog(
-        `启动任务 #${id}：${task.url}`
+        `启动任务 #${id}`
       );
 
       res.json(result);
@@ -343,8 +349,11 @@ app.post(
         updatedTask ||
         getTask(id);
 
+      /*
+       * 不在日志中显示 URL
+       */
       addLog(
-        `停止任务 #${id}：${task.url}`
+        `停止任务 #${id}`
       );
 
       res.json(result);
@@ -406,8 +415,11 @@ app.put(
 
       }
 
+      /*
+       * 不在日志中显示 URL
+       */
       addLog(
-        `更新任务 #${task.id}：${task.url}`
+        `更新任务 #${task.id}`
       );
 
       res.json(task);
@@ -468,8 +480,11 @@ app.delete(
 
       deleteTask(id);
 
+      /*
+       * 不在日志中显示 URL
+       */
       addLog(
-        `删除任务 #${id}：${task.url}`
+        `删除任务 #${id}`
       );
 
       res.json({
