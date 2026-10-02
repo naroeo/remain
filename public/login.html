@@ -1,8 +1,7 @@
+```html
 <!DOCTYPE html>
 <html lang="zh-CN">
-
 <head>
-
   <meta charset="UTF-8">
 
   <meta
@@ -16,63 +15,52 @@
     rel="stylesheet"
     href="/style.css"
   >
-
 </head>
 
 <body>
 
-  <div class="login-container">
+  <div class="login-page">
 
     <div class="login-card">
 
       <div class="login-header">
-
         <h1>Remain</h1>
-
-        <p>
-          定时保持网页活跃
-        </p>
-
+        <p>请输入管理密码</p>
       </div>
 
 
-      <form
-        id="loginForm"
-        class="login-form"
-      >
+      <form id="loginForm">
 
         <div class="form-group">
 
           <label for="password">
-            管理密码
+            密码
           </label>
 
           <input
             id="password"
-            name="password"
             type="password"
             placeholder="请输入密码"
             autocomplete="current-password"
             required
-            autofocus
           >
 
         </div>
+
+
+        <button
+          id="loginButton"
+          type="submit"
+          class="login-button"
+        >
+          登录
+        </button>
 
 
         <div
           id="loginError"
           class="login-error"
         ></div>
-
-
-        <button
-          id="loginButton"
-          type="submit"
-          class="primary-button login-button"
-        >
-          登录
-        </button>
 
       </form>
 
@@ -82,59 +70,31 @@
 
 
   <script>
+    const TOKEN_KEY = "remain_token";
 
     const form =
-      document.getElementById(
-        "loginForm"
-      );
+      document.getElementById("loginForm");
 
-    const passwordInput =
-      document.getElementById(
-        "password"
-      );
+    const password =
+      document.getElementById("password");
 
-    const loginButton =
-      document.getElementById(
-        "loginButton"
-      );
+    const button =
+      document.getElementById("loginButton");
 
-    const loginError =
-      document.getElementById(
-        "loginError"
-      );
+    const error =
+      document.getElementById("loginError");
 
-
-    /*
-     * =========================
-     * Login
-     * =========================
-     */
 
     form.addEventListener(
       "submit",
-      async event => {
+      async (event) => {
 
         event.preventDefault();
 
-        loginError.textContent = "";
+        error.textContent = "";
 
-        const password =
-          passwordInput.value;
-
-        if (!password) {
-
-          loginError.textContent =
-            "请输入密码";
-
-          return;
-        }
-
-
-        loginButton.disabled = true;
-
-        loginButton.textContent =
-          "登录中...";
-
+        button.disabled = true;
+        button.textContent = "登录中...";
 
         try {
 
@@ -149,10 +109,10 @@
                     "application/json"
                 },
 
-                body:
-                  JSON.stringify({
-                    password
-                  })
+                body: JSON.stringify({
+                  password:
+                    password.value
+                })
               }
             );
 
@@ -161,52 +121,49 @@
             await response.json();
 
 
-          if (
-            response.ok &&
-            data.success
-          ) {
-
-            window.location.href =
-              "/";
-
-            return;
+          if (!response.ok) {
+            throw new Error(
+              data.error || "登录失败"
+            );
           }
 
 
-          loginError.textContent =
-            data.error ||
-            "登录失败";
+          if (!data.token) {
+            throw new Error(
+              "服务器没有返回 Token"
+            );
+          }
 
 
-          passwordInput.value = "";
-
-          passwordInput.focus();
-
-
-        } catch (error) {
-
-          console.error(
-            "Login error:",
-            error
+          localStorage.setItem(
+            TOKEN_KEY,
+            data.token
           );
 
-          loginError.textContent =
-            "无法连接服务器，请稍后重试";
+
+          window.location.href = "/";
+
+        } catch (err) {
+
+          console.error(
+            "[Login]",
+            err
+          );
+
+          error.textContent =
+            err.message || "登录失败";
 
         } finally {
 
-          loginButton.disabled = false;
-
-          loginButton.textContent =
-            "登录";
+          button.disabled = false;
+          button.textContent = "登录";
 
         }
 
       }
     );
-
   </script>
 
 </body>
-
 </html>
+```
