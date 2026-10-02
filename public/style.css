@@ -1,238 +1,375 @@
-* {
-  box-sizing: border-box;
+{
+box-sizing: border-box;
+}
+
+html {
+color-scheme: dark;
 }
 
 body {
-  margin: 0;
-  background: #0f1117;
-  color: #e8eaed;
-  font-family:
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
+margin: 0;
+background: #0f1117;
+color: #e8eaed;
+
+font-family:
+system-ui,
+-apple-system,
+BlinkMacSystemFont,
+"Segoe UI",
+sans-serif;
 }
 
 .container {
-  width: min(900px, 92%);
-  margin: 40px auto;
+width: min(900px, 92%);
+margin: 40px auto 60px;
 }
-
-header {
-  margin-bottom: 30px;
-}
-
-h1 {
-  margin-bottom: 8px;
-}
-
-h2 {
-  margin-top: 0;
-}
-
-p,
-.meta {
-  color: #9aa0aa;
-}
-
-.panel,
-.task {
-  background: #171a21;
-  border: 1px solid #292e39;
-  border-radius: 12px;
-  padding: 20px;
-  margin-bottom: 20px;
-}
-
-label {
-  display: block;
-  margin-bottom: 15px;
-  color: #c9ced8;
-}
-
-input {
-  display: block;
-  width: 100%;
-  margin-top: 7px;
-  padding: 12px;
-  border-radius: 8px;
-  border: 1px solid #343a46;
-  background: #0f1117;
-  color: white;
-  font-size: 16px;
-}
-
-.row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 15px;
-}
-
-button {
-  border: 0;
-  border-radius: 8px;
-  padding: 10px 15px;
-  background: #4f7cff;
-  color: white;
-  cursor: pointer;
-}
-
-button:hover {
-  opacity: .9;
-}
-
-button.danger {
-  background: #c84242;
-}
-
-.task {
-  display: flex;
-  justify-content: space-between;
-  gap: 20px;
-}
-
-.url {
-  font-weight: 600;
-  margin-bottom: 8px;
-  word-break: break-all;
-}
-
-.meta {
-  font-size: 14px;
-  margin-top: 5px;
-}
-
-.actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.empty {
-  padding: 30px;
-  text-align: center;
-  color: #777f8e;
-}
-
-@media (max-width: 600px) {
-
-  .row {
-    grid-template-columns: 1fr;
-  }
-
-  .task {
-    flex-direction: column;
-  }
-
-  .actions {
-    flex-wrap: wrap;
-  }
 
 /* =========================
-   Runtime Logs
-   ========================= */
+Header
+========================= */
 
-.logs-section {
-  margin-top: 24px;
+.header {
+margin-bottom: 30px;
+}
+
+.header h1 {
+margin: 0 0 8px;
+font-size: 32px;
+letter-spacing: -0.5px;
+}
+
+.header p {
+margin: 0;
+color: #9aa0aa;
+}
+
+/* =========================
+Panel
+========================= */
+
+.panel {
+background: #171a21;
+border: 1px solid #292e39;
+border-radius: 12px;
+padding: 20px;
+margin-bottom: 20px;
+}
+
+.panel h2 {
+margin: 0 0 20px;
+font-size: 20px;
+}
+
+/* =========================
+Section Header
+========================= */
+
+.section-header {
+display: flex;
+justify-content: space-between;
+align-items: center;
+gap: 15px;
+margin-bottom: 18px;
+}
+
+.section-header h2 {
+margin: 0;
 }
 
 .section-description {
-  margin: 4px 0 0;
-  color: #6b7280;
-  font-size: 13px;
+margin: 4px 0 0;
+color: #6b7280;
+font-size: 13px;
+}
+
+/* =========================
+Form
+========================= */
+
+label {
+display: block;
+margin-bottom: 15px;
+color: #c9ced8;
+font-size: 14px;
+}
+
+input {
+display: block;
+width: 100%;
+margin-top: 7px;
+
+padding: 12px;
+
+border-radius: 8px;
+border: 1px solid #343a46;
+
+background: #0f1117;
+color: #ffffff;
+
+font-size: 16px;
+
+outline: none;
+}
+
+input:focus {
+border-color: #4f7cff;
+box-shadow:
+0 0 0 2px
+rgba(79, 124, 255, 0.15);
+}
+
+.row {
+display: grid;
+grid-template-columns: 1fr 1fr;
+gap: 15px;
+}
+
+/* =========================
+Buttons
+========================= */
+
+button {
+border: 0;
+border-radius: 8px;
+
+padding: 10px 15px;
+
+background: #4f7cff;
+color: #ffffff;
+
+font-size: 14px;
+cursor: pointer;
+
+transition:
+opacity 0.15s ease,
+background 0.15s ease;
+}
+
+button:hover {
+opacity: 0.9;
+}
+
+button:active {
+opacity: 0.75;
+}
+
+button.danger {
+background: #c84242;
+}
+
+/* =========================
+Tasks
+========================= */
+
+.task {
+display: flex;
+justify-content: space-between;
+align-items: flex-start;
+
+gap: 20px;
+
+background: #171a21;
+border: 1px solid #292e39;
+border-radius: 12px;
+
+padding: 18px;
+margin-bottom: 12px;
+}
+
+.task:last-child {
+margin-bottom: 0;
+}
+
+.task-main {
+min-width: 0;
+flex: 1;
+}
+
+.url {
+font-weight: 600;
+margin-bottom: 8px;
+
+word-break: break-all;
+overflow-wrap: anywhere;
+
+color: #f1f3f5;
+}
+
+.meta {
+color: #9aa0aa;
+font-size: 14px;
+margin-top: 5px;
+}
+
+.actions {
+display: flex;
+gap: 8px;
+
+align-items: center;
+flex-shrink: 0;
+}
+
+/* =========================
+Empty State
+========================= */
+
+.empty {
+padding: 30px;
+
+text-align: center;
+
+color: #777f8e;
+}
+
+/* =========================
+Runtime Logs
+========================= */
+
+.logs-section {
+margin-top: 24px;
 }
 
 .logs {
-  width: 100%;
-  box-sizing: border-box;
+width: 100%;
+height: 280px;
 
-  height: 280px;
+overflow-y: auto;
+overflow-x: hidden;
 
-  overflow-y: auto;
-  overflow-x: hidden;
+background: #111827;
+color: #d1d5db;
 
-  background: #111827;
-  color: #d1d5db;
+border: 1px solid #1f2937;
+border-radius: 10px;
 
-  border: 1px solid #1f2937;
-  border-radius: 10px;
+padding: 12px;
 
-  padding: 12px;
+font-family:
+ui-monospace,
+SFMono-Regular,
+Menlo,
+Monaco,
+Consolas,
+"Liberation Mono",
+"Courier New",
+monospace;
 
-  font-family:
-    ui-monospace,
-    SFMono-Regular,
-    Menlo,
-    Monaco,
-    Consolas,
-    "Liberation Mono",
-    "Courier New",
-    monospace;
-
-  font-size: 13px;
-  line-height: 1.6;
+font-size: 13px;
+line-height: 1.6;
 }
 
 /* 单条日志 */
+
 .log {
-  padding: 3px 0;
+padding: 3px 0;
 
-  border-bottom:
-    1px solid rgba(
-      255,
-      255,
-      255,
-      0.05
-    );
+border-bottom:
+1px solid
+rgba(255, 255, 255, 0.05);
 
-  word-break: break-word;
+word-break: break-word;
+overflow-wrap: anywhere;
 }
 
 .log:last-child {
-  border-bottom: none;
+border-bottom: none;
 }
 
 /* 日志时间 */
+
 .log-time {
-  color: #6b7280;
-  margin-right: 10px;
+color: #6b7280;
+margin-right: 10px;
 }
 
 /* 普通日志 */
+
 .log-info {
-  color: #d1d5db;
+color: #d1d5db;
 }
 
 /* 错误日志 */
+
 .log-error {
-  color: #f87171;
+color: #f87171;
 }
 
-/* 空日志状态 */
+/* 空日志 */
+
 .log-empty {
-  color: #6b7280;
+color: #6b7280;
 
-  text-align: center;
+text-align: center;
 
-  padding: 40px 10px;
+padding: 40px 10px;
 }
 
-/* 日志滚动条 */
+/* =========================
+Scrollbar
+========================= */
+
 .logs::-webkit-scrollbar {
-  width: 8px;
+width: 8px;
 }
 
 .logs::-webkit-scrollbar-track {
-  background: #0f172a;
+background: #0f172a;
 }
 
 .logs::-webkit-scrollbar-thumb {
-  background: #374151;
-  border-radius: 4px;
+background: #374151;
+border-radius: 4px;
 }
 
 .logs::-webkit-scrollbar-thumb:hover {
-  background: #4b5563;
+background: #4b5563;
+}
+
+/* =========================
+Mobile
+========================= */
+
+@media (max-width: 600px) {
+
+.container {
+width: 94%;
+margin-top: 25px;
+}
+
+.header h1 {
+font-size: 28px;
+}
+
+.panel {
+padding: 16px;
+}
+
+.row {
+grid-template-columns: 1fr;
+gap: 0;
+}
+
+.task {
+flex-direction: column;
+gap: 15px;
+}
+
+.actions {
+width: 100%;
+flex-wrap: wrap;
+}
+
+.actions button {
+flex: 1;
+min-width: 80px;
+}
+
+.section-header {
+align-items: flex-start;
+}
+
+.logs {
+height: 240px;
+font-size: 12px;
 }
 }
