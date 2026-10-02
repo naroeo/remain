@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+  >
+
+  <title>Browser KeepAlive</title>
+
+  <link
+    rel="stylesheet"
+    href="/style.css"
+  >
+</head>
+
+<body>
+
+<div class="container">
+
+  <header>
+
+    <h1>🌐 Browser KeepAlive</h1>
+
+    <p>
+      使用真实 Chromium 定时访问网页
+    </p>
+
+  </header>
+
+  <section class="panel">
+
+    <h2>添加任务</h2>
+
+    <form id="taskForm">
+
+      <label>
+        URL
+
+        <input
+          id="url"
+          type="url"
+          placeholder="https://example.com"
+          required
+        >
+      </label>
+
+      <div class="row">
+
+        <label>
+          访问间隔（分钟）
+
+          <input
+            id="interval"
+            type="number"
+            min="1"
+            value="5"
+          >
+        </label>
+
+        <label>
+          页面停留（秒）
+
+          <input
+            id="stay"
+            type="number"
+            min="1"
+            value="10"
+          >
+        </label>
+
+      </div>
+
+      <button type="submit">
+        添加任务
+      </button>
+
+    </form>
+
+  </section>
+
+  <section>
+
+    <h2>任务</h2>
+
+    <div id="tasks"></div>
+
+  </section>
+
+</div>
+
+<script src="/app.js"></script>
+
+</body>
+</html>
