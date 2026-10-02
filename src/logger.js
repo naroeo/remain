@@ -1,8 +1,13 @@
 const clients = new Set();
+
 const logs = [];
+
 const MAX_LOGS = 200;
 
-function addLog(message, level = "info") {
+function addLog(
+  message,
+  level = "info"
+) {
   const log = {
     time: new Date().toISOString(),
     level,
@@ -21,7 +26,7 @@ function addLog(message, level = "info") {
   for (const client of clients) {
     try {
       client.write(data);
-    } catch {
+    } catch (error) {
       clients.delete(client);
     }
   }
@@ -34,6 +39,7 @@ function addLog(message, level = "info") {
 }
 
 function subscribe(response) {
+
   response.setHeader(
     "Content-Type",
     "text/event-stream"
@@ -55,24 +61,50 @@ function subscribe(response) {
 
   clients.add(response);
 
+  // 把已经存在的日志发送给刚连接的浏览器
   for (const log of logs) {
+
     response.write(
       `data: ${JSON.stringify(log)}\n\n`
     );
+
   }
 
-  const heartbeat = setInterval(() => {
-    try {
-      response.write(": heartbeat\n\n");
-    } catch {
-      clearInterval(heartbeat);
-    }
-  }, 15000);
+  // 每 15 秒发送一次心跳
+  // 防止某些代理服务器关闭长连接
+  const heartbeat =
+    setInterval(() => {
 
-  response.on("close", () => {
-    clearInterval(heartbeat);
-    clients.delete(response);
-  });
+      try {
+
+        response.write(
+          ": heartbeat\n\n"
+        );
+
+      } catch (error) {
+
+        clearInterval(
+          heartbeat
+        );
+
+      }
+
+    }, 15000);
+
+  response.on(
+    "close",
+    () => {
+
+      clearInterval(
+        heartbeat
+      );
+
+      clients.delete(
+        response
+      );
+
+    }
+  );
 }
 
 function getLogs() {
