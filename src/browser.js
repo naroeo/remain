@@ -27,6 +27,19 @@ const browserDataDir =
     "browser"
   );
 
+const crashpadDir =
+  path.join(
+    dataDir,
+    "crashpad"
+  );
+
+
+/*
+ * ============================
+ * Start Xvfb
+ * ============================
+ */
+
 function startDisplay() {
 
   if (displayProcess) {
@@ -49,6 +62,11 @@ function startDisplay() {
       "tcp"
     ],
     {
+      env: {
+        ...process.env,
+        DISPLAY: ":99"
+      },
+
       stdio: [
         "ignore",
         "pipe",
@@ -60,18 +78,22 @@ function startDisplay() {
   displayProcess.stdout.on(
     "data",
     data => {
+
       console.log(
         `[Xvfb] ${data}`
       );
+
     }
   );
 
   displayProcess.stderr.on(
     "data",
     data => {
+
       console.error(
         `[Xvfb] ${data}`
       );
+
     }
   );
 
@@ -84,11 +106,19 @@ function startDisplay() {
       );
 
       displayProcess = null;
+
     }
   );
 
   process.env.DISPLAY = ":99";
 }
+
+
+/*
+ * ============================
+ * Start Fluxbox
+ * ============================
+ */
 
 function startWindowManager() {
 
@@ -108,6 +138,7 @@ function startWindowManager() {
         ...process.env,
         DISPLAY: ":99"
       },
+
       stdio: [
         "ignore",
         "pipe",
@@ -119,21 +150,45 @@ function startWindowManager() {
   windowManagerProcess.stdout.on(
     "data",
     data => {
+
       console.log(
         `[Fluxbox] ${data}`
       );
+
     }
   );
 
   windowManagerProcess.stderr.on(
     "data",
     data => {
+
       console.error(
         `[Fluxbox] ${data}`
       );
+
+    }
+  );
+
+  windowManagerProcess.on(
+    "exit",
+    code => {
+
+      console.log(
+        `[Fluxbox] exited with code ${code}`
+      );
+
+      windowManagerProcess = null;
+
     }
   );
 }
+
+
+/*
+ * ============================
+ * Browser Context
+ * ============================
+ */
 
 async function getBrowserContext() {
 
@@ -142,6 +197,21 @@ async function getBrowserContext() {
   }
 
   startDisplay();
+
+  /*
+   * 给 Xvfb 一点启动时间。
+   *
+   * 容器启动时 Xvfb 是异步进程，
+   * Chromium 太快启动可能会连接不到 DISPLAY。
+   */
+
+  await new Promise(
+    resolve =>
+      setTimeout(
+        resolve,
+        500
+      )
+  );
 
   startWindowManager();
 
@@ -152,58 +222,151 @@ async function getBrowserContext() {
     }
   );
 
+  fs.mkdirSync(
+    crashpadDir,
+    {
+      recursive: true
+    }
+  );
+
   addLog(
     "正在启动有头 Chromium..."
   );
 
-  browserContext =
-    await chromium.launchPersistentContext(
-      browserDataDir,
-      {
-        headless: false,
+  try {
 
-        viewport: {
-          width: 1280,
-          height: 720
-        },
+    browserContext =
+      await chromium.launchPersistentContext(
+        browserDataDir,
+        {
+          headless: false,
 
-        args: [
-          "--no-sandbox",
-          "--disable-dev-shm-usage",
-          "--disable-gpu",
-          "--disable-software-rasterizer",
-          "--window-size=1280,720"
-        ]
-      }
+          viewport: {
+            width: 1280,
+            height: 720
+          },
+
+          env: {
+            ...process.env,
+            DISPLAY: ":99",
+            HOME: "/tmp"
+          },
+
+          args: [
+            "--no-sandbox",
+
+            "--disable-dev-shm-usage",
+
+            "--disable-gpu",
+
+            "--disable-software-rasterizer",
+
+            "--disable-background-networking",
+
+            "--disable-background-timer-throttling",
+
+            "--disable-renderer-backgrounding",
+
+            "--disable-breakpad",
+
+            "--disable-crash-reporter",
+
+            "--noerrdialogs",
+
+            "--disable-features=Crashpad",
+
+            "--disable-features=Translate",
+
+            "--disable-sync",
+
+            "--disable-default-apps",
+
+            "--no-first-run",
+
+            "--no-default-browser-check",
+
+            "--disable-component-update",
+
+            "--disable-popup-blocking",
+
+            "--disable-prompt-on-repost",
+
+            "--disable-hang-monitor",
+
+            "--window-size=1280,720"
+          ]
+        }
+      );
+
+    addLog(
+      "Chromium 启动成功"
     );
 
-  addLog(
-    "Chromium 启动成功"
-  );
+    return browserContext;
 
-  return browserContext;
+  } catch (error) {
+
+    browserContext = null;
+
+    addLog(
+      `Chromium 启动失败：${error.message}`,
+      "error"
+    );
+
+    /*
+     * 如果 Chromium 启动失败，
+     * 清理一下可能残留的 browser context。
+     */
+
+    try {
+
+      if (browserContext) {
+        await browserContext.close();
+      }
+
+    } catch (_) {
+      // ignore
+    }
+
+    browserContext = null;
+
+    throw error;
+  }
 }
+
+
+/*
+ * ============================
+ * Visit URL
+ * ============================
+ */
 
 async function visit(
   url,
   staySeconds = 10
 ) {
 
-  const context =
-    await getBrowserContext();
-
-  let page;
+  let context;
 
   try {
+
+    context =
+      await getBrowserContext();
+
+    let page;
 
     const pages =
       context.pages();
 
     if (pages.length > 0) {
+
       page = pages[0];
+
     } else {
+
       page =
         await context.newPage();
+
     }
 
     addLog(
@@ -215,6 +378,7 @@ async function visit(
       {
         waitUntil:
           "domcontentloaded",
+
         timeout: 60000
       }
     );
@@ -246,12 +410,43 @@ async function visit(
       "error"
     );
 
+    /*
+     * 如果浏览器进程已经崩溃，
+     * 清掉 context，让下一次访问可以重新启动。
+     */
+
+    if (
+      error.message.includes(
+        "Target page, context or browser has been closed"
+      ) ||
+      error.message.includes(
+        "Browser has been closed"
+      )
+    ) {
+
+      browserContext = null;
+
+      addLog(
+        "检测到 Chromium 已退出，将在下一次访问时重新启动",
+        "error"
+      );
+
+    }
+
     return {
       success: false,
-      error: error.message
+      error:
+        error.message
     };
   }
 }
+
+
+/*
+ * ============================
+ * Close Browser
+ * ============================
+ */
 
 async function closeBrowser() {
 
@@ -273,16 +468,30 @@ async function closeBrowser() {
     browserContext = null;
   }
 
+
   if (windowManagerProcess) {
 
-    windowManagerProcess.kill();
+    try {
+
+      windowManagerProcess.kill();
+
+    } catch (_) {
+      // ignore
+    }
 
     windowManagerProcess = null;
   }
 
+
   if (displayProcess) {
 
-    displayProcess.kill();
+    try {
+
+      displayProcess.kill();
+
+    } catch (_) {
+      // ignore
+    }
 
     displayProcess = null;
   }
@@ -291,6 +500,7 @@ async function closeBrowser() {
     "浏览器已关闭"
   );
 }
+
 
 module.exports = {
   visit,
