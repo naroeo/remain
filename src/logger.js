@@ -4,6 +4,7 @@ const logs = [];
 
 const subscribers = new Set();
 
+
 /*
  * ============================
  * 添加日志
@@ -25,11 +26,13 @@ function addLog(
       String(message)
   };
 
+
   /*
    * 保存日志
    */
 
   logs.push(log);
+
 
   /*
    * 最多保留 200 条
@@ -46,12 +49,15 @@ function addLog(
 
   }
 
+
   /*
    * 输出到 Render 日志
    *
    * 注意：
    * 这里不修改 message。
-   * 哪些内容需要隐藏 URL，
+   *
+   * 哪些内容需要隐藏 URL、
+   * 密码等敏感信息，
    * 由调用 addLog() 的地方决定。
    */
 
@@ -60,9 +66,11 @@ function addLog(
       ? "[ERROR]"
       : "[INFO]";
 
+
   console.log(
     `${prefix} ${log.message}`
   );
+
 
   /*
    * 推送到网页端
@@ -112,7 +120,9 @@ function getLogs() {
  * ============================
  */
 
-function subscribe(res) {
+function subscribe(
+  res
+) {
 
   /*
    * 设置 SSE Headers
@@ -135,6 +145,7 @@ function subscribe(res) {
     }
   );
 
+
   /*
    * 发送当前历史日志
    */
@@ -146,6 +157,7 @@ function subscribe(res) {
     })}\n\n`
   );
 
+
   /*
    * 保存连接
    */
@@ -154,11 +166,12 @@ function subscribe(res) {
     res
   );
 
+
   /*
    * 心跳
    *
    * 防止 Render / 代理
-   * 长时间没有数据时关闭连接
+   * 长时间没有数据时关闭连接。
    */
 
   const heartbeat =
@@ -186,6 +199,7 @@ function subscribe(res) {
       },
       15000
     );
+
 
   /*
    * 浏览器关闭连接
