@@ -2,29 +2,63 @@ const Database = require("better-sqlite3");
 const fs = require("fs");
 const path = require("path");
 
+
+/*
+ * ============================
+ * 数据目录
+ * ============================
+ */
+
 const dataDir =
   process.env.DATA_DIR ||
   "/tmp/remain-data";
 
-fs.mkdirSync(dataDir, {
-  recursive: true
-});
 
-const dbPath = path.join(
+fs.mkdirSync(
   dataDir,
-  "app.db"
+  {
+    recursive: true
+  }
 );
 
-console.log(`[Database] ${dbPath}`);
 
-const db = new Database(dbPath);
+const dbPath =
+  path.join(
+    dataDir,
+    "app.db"
+  );
 
-db.pragma("journal_mode = WAL");
+
+console.log(
+  `[Database] ${dbPath}`
+);
+
+
+/*
+ * ============================
+ * 打开数据库
+ * ============================
+ */
+
+const db =
+  new Database(
+    dbPath
+  );
+
+
+db.pragma(
+  "journal_mode = WAL"
+);
 
 
 /*
  * ============================
  * 创建任务表
+ * ============================
+ *
+ * 如果数据库已经存在，
+ * CREATE TABLE IF NOT EXISTS
+ * 不会影响现有数据。
  * ============================
  */
 
@@ -47,41 +81,54 @@ db.exec(`
 
 /*
  * ============================
- * 数据库升级
+ * 兼容旧数据库
  * ============================
  *
- * 如果 Render 上已经存在旧版 app.db，
- * 旧表里没有 name 字段，
- * 这里自动补上。
+ * 如果旧数据库没有 name 字段，
+ * 自动添加。
  *
- * 不会删除原来的任务。
+ * 不会删除旧字段，
+ * 不会修改现有任务 ID。
+ * ============================
  */
 
-const columns = db
-  .prepare("PRAGMA table_info(tasks)")
-  .all();
+const columns =
+  db
+    .prepare(
+      "PRAGMA table_info(tasks)"
+    )
+    .all();
+
 
 const hasNameColumn =
   columns.some(
-    column => column.name === "name"
+    column =>
+      column.name === "name"
   );
 
-if (!hasNameColumn) {
 
-  db.exec(`
-    ALTER TABLE tasks
-    ADD COLUMN name TEXT NOT NULL DEFAULT ''
-  `);
+if (
+  !hasNameColumn
+) {
+
+  db.exec(
+    `
+      ALTER TABLE tasks
+      ADD COLUMN name TEXT NOT NULL DEFAULT ''
+    `
+  );
+
 
   console.log(
     "[Database] 已添加 tasks.name 字段"
   );
+
 }
 
 
 /*
  * ============================
- * 获取任务
+ * 获取所有任务
  * ============================
  */
 
@@ -89,9 +136,14 @@ function getTasks() {
 
   return db
     .prepare(
-      "SELECT * FROM tasks ORDER BY id DESC"
+      `
+        SELECT *
+        FROM tasks
+        ORDER BY id DESC
+      `
     )
     .all();
+
 }
 
 
@@ -101,13 +153,20 @@ function getTasks() {
  * ============================
  */
 
-function getTask(id) {
+function getTask(
+  id
+) {
 
   return db
     .prepare(
-      "SELECT * FROM tasks WHERE id = ?"
+      `
+        SELECT *
+        FROM tasks
+        WHERE id = ?
+      `
     )
     .get(id);
+
 }
 
 
@@ -124,34 +183,59 @@ function createTask(
   staySeconds
 ) {
 
-  const result = db
-    .prepare(`
-      INSERT INTO tasks (
+  const result =
+    db
+      .prepare(
+        `
+          INSERT INTO tasks
+          (
+            name,
+            url,
+            interval_minutes,
+            stay_seconds,
+            created_at
+          )
+          VALUES
+          (
+            ?,
+            ?,
+            ?,
+            ?,
+            ?
+          )
+        `
+      )
+      .run(
         name,
         url,
-        interval_minutes,
-        stay_seconds,
-        created_at
-      )
-      VALUES (?, ?, ?, ?, ?)
-    `)
-    .run(
-      name,
-      url,
-      intervalMinutes,
-      staySeconds,
-      new Date().toISOString()
-    );
+        intervalMinutes,
+        staySeconds,
+        new Date().toISOString()
+      );
+
 
   return getTask(
     result.lastInsertRowid
   );
+
 }
 
 
 /*
  * ============================
  * 更新任务
+ * ============================
+ *
+ * 未提供的字段继续使用
+ * 数据库中原来的值。
+ *
+ * 特别注意：
+ * enabled 只有在明确传入时
+ * 才会改变。
+ *
+ * 所以编辑任务时不会因为
+ * 修改名称 / URL / 间隔而
+ * 自动改变运行状态。
  * ============================
  */
 
@@ -163,8 +247,11 @@ function updateTask(
   const task =
     getTask(id);
 
+
   if (!task) {
+
     return null;
+
   }
 
 
@@ -173,49 +260,60 @@ function updateTask(
     task.name ??
     "";
 
+
   const url =
     fields.url ??
     task.url;
+
 
   const interval =
     fields.interval_minutes ??
     task.interval_minutes;
 
+
   const stay =
     fields.stay_seconds ??
     task.stay_seconds;
+
 
   const enabled =
     fields.enabled ??
     task.enabled;
 
 
-  db.prepare(`
-    UPDATE tasks
-    SET
-      name = ?,
-      url = ?,
-      interval_minutes = ?,
-      stay_seconds = ?,
-      enabled = ?
-    WHERE id = ?
-  `).run(
-    name,
-    url,
-    interval,
-    stay,
-    enabled,
+  db
+    .prepare(
+      `
+        UPDATE tasks
+        SET
+          name = ?,
+          url = ?,
+          interval_minutes = ?,
+          stay_seconds = ?,
+          enabled = ?
+        WHERE id = ?
+      `
+    )
+    .run(
+      name,
+      url,
+      interval,
+      stay,
+      enabled,
+      id
+    );
+
+
+  return getTask(
     id
   );
 
-
-  return getTask(id);
 }
 
 
 /*
  * ============================
- * 记录访问
+ * 记录任务执行
  * ============================
  */
 
@@ -227,11 +325,15 @@ function recordVisit(
   const now =
     new Date();
 
+
   const task =
     getTask(id);
 
+
   if (!task) {
+
     return null;
+
   }
 
 
@@ -244,23 +346,35 @@ function recordVisit(
     );
 
 
-  db.prepare(`
-    UPDATE tasks
-    SET
-      visit_count = visit_count + 1,
-      last_visit = ?,
-      next_visit = ?,
-      last_status = ?
-    WHERE id = ?
-  `).run(
-    now.toISOString(),
-    next.toISOString(),
-    status,
+  db
+    .prepare(
+      `
+        UPDATE tasks
+        SET
+          visit_count =
+            visit_count + 1,
+
+          last_visit = ?,
+
+          next_visit = ?,
+
+          last_status = ?
+
+        WHERE id = ?
+      `
+    )
+    .run(
+      now.toISOString(),
+      next.toISOString(),
+      status,
+      id
+    );
+
+
+  return getTask(
     id
   );
 
-
-  return getTask(id);
 }
 
 
@@ -270,17 +384,25 @@ function recordVisit(
  * ============================
  */
 
-function deleteTask(id) {
+function deleteTask(
+  id
+) {
 
-  db.prepare(
-    "DELETE FROM tasks WHERE id = ?"
-  ).run(id);
+  db
+    .prepare(
+      `
+        DELETE FROM tasks
+        WHERE id = ?
+      `
+    )
+    .run(id);
+
 }
 
 
 /*
  * ============================
- * Export
+ * 导出
  * ============================
  */
 
