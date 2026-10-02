@@ -37,38 +37,12 @@ function getRcloneEnvironment() {
   };
 }
 
-function runRclone(args) {
-  return new Promise((resolve, reject) => {
-    const env = getRcloneEnvironment();
-
-    if (!env) {
-      reject(new Error("RCLONE_CONF 未配置"));
-      return;
-    }
-
-    execFile(
-      "rclone",
-      args,
-      {
-        env,
-        windowsHide: true
-      },
-      (error, stdout, stderr) => {
-        if (error) {
-          reject(error);
-          return;
-        }
-
-        resolve({
-          stdout,
-          stderr
-        });
-      }
-    );
-  });
-}
-
-async function restoreDatabase() {
+/*
+ * 启动恢复必须同步完成。
+ * 这样 server.js / scheduler.js 开始运行时，
+ * SQLite 数据库一定已经初始化完成。
+ */
+function restoreDatabaseSync() {
   if (fs.existsSync(dbPath)) {
     return false;
   }
@@ -97,18 +71,32 @@ async function restoreDatabase() {
 
     console.log("[Database] 正在从云端恢复数据库...");
 
-    await runRclone([
-      "copyto",
-      remoteFolder,
-      restorePath
-    ]);
+    const env = getRcloneEnvironment();
+
+    const result = spawnSync(
+      "rclone",
+      [
+        "copyto",
+        remoteFolder,
+        restorePath
+      ],
+      {
+        env,
+        stdio: "ignore"
+      }
+    );
+
+    if (result.error || result.status !== 0) {
+      console.log("[Database] 云端没有可用数据库备份");
+      return false;
+    }
 
     if (!fs.existsSync(restorePath)) {
       console.log("[Database] 云端没有可用数据库备份");
       return false;
     }
 
-    // 验证 SQLite 文件是否正常
+    // 验证恢复出来的文件确实是可用的 SQLite 数据库
     let testDb = null;
 
     try {
@@ -116,12 +104,17 @@ async function restoreDatabase() {
         readonly: true
       });
 
-      testDb.prepare(
-        "SELECT name FROM sqlite_master LIMIT 1"
-      ).get();
+      testDb
+        .prepare("SELECT name FROM sqlite_master LIMIT 1")
+        .get();
+    } catch (error) {
+      console.log("[Database] 云端数据库文件无效，创建新数据库");
+      return false;
     } finally {
       if (testDb) {
-        testDb.close();
+        try {
+          testDb.close();
+        } catch (error) {}
       }
     }
 
@@ -138,9 +131,7 @@ async function restoreDatabase() {
       if (fs.existsSync(restorePath)) {
         fs.unlinkSync(restorePath);
       }
-    } catch (error) {
-      console.log("[Database] 清理恢复临时文件失败");
-    }
+    } catch (error) {}
   }
 }
 
@@ -155,7 +146,7 @@ function removeOldBackupFile() {
   }
 }
 
-async function backupDatabase() {
+function backupDatabase() {
   if (backupRunning) {
     return;
   }
@@ -175,108 +166,151 @@ async function backupDatabase() {
 
   backupRunning = true;
 
-  try {
-    removeOldBackupFile();
-
-    console.log("[Database] 开始备份数据库");
-
-    await db.backup(tempBackupPath);
-
-    if (!fs.existsSync(tempBackupPath)) {
-      throw new Error("数据库备份文件未生成");
-    }
-
-    await runRclone([
-      "copyto",
-      tempBackupPath,
-      remoteFolder
-    ]);
-
-    console.log("[Database] 数据库备份成功");
-
-    // 上传成功后立即删除本地临时备份
+  (async () => {
     try {
-      fs.unlinkSync(tempBackupPath);
-      console.log("[Database] 已删除本地临时备份");
-    } catch (error) {
-      console.log("[Database] 删除本地临时备份失败");
-    }
-  } catch (error) {
-    console.log("[Database] 数据库备份失败");
+      removeOldBackupFile();
 
-    // 无论上传成功还是失败，都不要长期保留临时文件
-    try {
-      if (fs.existsSync(tempBackupPath)) {
-        fs.unlinkSync(tempBackupPath);
+      console.log("[Database] 开始备份数据库");
+
+      await db.backup(tempBackupPath);
+
+      if (!fs.existsSync(tempBackupPath)) {
+        throw new Error("数据库备份文件未生成");
       }
-    } catch (cleanupError) {
-      console.log("[Database] 清理临时备份失败");
+
+      const env = getRcloneEnvironment();
+
+      await new Promise((resolve, reject) => {
+        execFile(
+          "rclone",
+          [
+            "copyto",
+            tempBackupPath,
+            remoteFolder
+          ],
+          {
+            env,
+            windowsHide: true
+          },
+          error => {
+            if (error) {
+              reject(error);
+              return;
+            }
+
+            resolve();
+          }
+        );
+      });
+
+      console.log("[Database] 数据库备份成功");
+
+      // 上传成功后立即删除本地临时备份
+      try {
+        if (fs.existsSync(tempBackupPath)) {
+          fs.unlinkSync(tempBackupPath);
+        }
+
+        console.log("[Database] 已删除本地临时备份");
+      } catch (error) {
+        console.log("[Database] 删除本地临时备份失败");
+      }
+    } catch (error) {
+      console.log("[Database] 数据库备份失败");
+
+      // 防止临时文件残留
+      try {
+        if (fs.existsSync(tempBackupPath)) {
+          fs.unlinkSync(tempBackupPath);
+        }
+      } catch (cleanupError) {
+        console.log("[Database] 清理临时备份失败");
+      }
+    } finally {
+      backupRunning = false;
     }
-  } finally {
-    backupRunning = false;
-  }
+  })();
 }
 
-async function initializeDatabase() {
-  removeOldBackupFile();
 
-  if (!fs.existsSync(dbPath)) {
-    await restoreDatabase();
-  }
+/*
+ * ============================
+ * 数据库启动初始化
+ * ============================
+ *
+ * 这里必须同步完成。
+ */
+
+removeOldBackupFile();
+
+if (!fs.existsSync(dbPath)) {
+  restoreDatabaseSync();
 }
 
-let db;
-let backupRunning = false;
 
-function initialize() {
-  return initializeDatabase();
-}
+/*
+ * 如果云端没有备份，
+ * better-sqlite3 会在这里创建新的 app.db。
+ */
+const db = new Database(dbPath);
 
-async function setupDatabase() {
-  await initialize();
+db.pragma("journal_mode = WAL");
 
-  db = new Database(dbPath);
+db.exec(`
+  CREATE TABLE IF NOT EXISTS tasks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL DEFAULT '',
+    url TEXT NOT NULL,
+    interval_minutes INTEGER NOT NULL DEFAULT 5,
+    stay_seconds INTEGER NOT NULL DEFAULT 10,
+    enabled INTEGER NOT NULL DEFAULT 0,
+    visit_count INTEGER NOT NULL DEFAULT 0,
+    last_visit TEXT,
+    next_visit TEXT,
+    last_status TEXT,
+    created_at TEXT NOT NULL
+  )
+`);
 
-  db.pragma("journal_mode = WAL");
 
+/*
+ * 兼容旧数据库。
+ * 如果以前没有 name 字段，就自动添加。
+ */
+const columns = db.prepare("PRAGMA table_info(tasks)").all();
+
+const hasNameColumn = columns.some(
+  column => column.name === "name"
+);
+
+if (!hasNameColumn) {
   db.exec(`
-    CREATE TABLE IF NOT EXISTS tasks (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL DEFAULT '',
-      url TEXT NOT NULL,
-      interval_minutes INTEGER NOT NULL DEFAULT 5,
-      stay_seconds INTEGER NOT NULL DEFAULT 10,
-      enabled INTEGER NOT NULL DEFAULT 0,
-      visit_count INTEGER NOT NULL DEFAULT 0,
-      last_visit TEXT,
-      next_visit TEXT,
-      last_status TEXT,
-      created_at TEXT NOT NULL
-    )
+    ALTER TABLE tasks
+    ADD COLUMN name TEXT NOT NULL DEFAULT ''
   `);
 
-  const columns = db.prepare("PRAGMA table_info(tasks)").all();
-
-  const hasNameColumn = columns.some(
-    column => column.name === "name"
-  );
-
-  if (!hasNameColumn) {
-    db.exec(`
-      ALTER TABLE tasks
-      ADD COLUMN name TEXT NOT NULL DEFAULT ''
-    `);
-
-    console.log("[Database] 已添加 tasks.name 字段");
-  }
-
-  // 每 6 小时备份一次
-  setInterval(() => {
-    backupDatabase().catch(() => {});
-  }, 6 * 60 * 60 * 1000);
-
-  return db;
+  console.log("[Database] 已添加 tasks.name 字段");
 }
+
+
+/*
+ * ============================
+ * 每 6 小时自动备份
+ * ============================
+ */
+
+let backupRunning = false;
+
+setInterval(() => {
+  backupDatabase();
+}, 6 * 60 * 60 * 1000);
+
+
+/*
+ * ============================
+ * Tasks
+ * ============================
+ */
 
 function getTasks() {
   return db.prepare(`
@@ -422,12 +456,6 @@ function deleteTask(id) {
     WHERE id = ?
   `).run(id);
 }
-
-setupDatabase().catch(error => {
-  console.error("[Database] 数据库初始化失败");
-  console.error(error);
-  process.exit(1);
-});
 
 module.exports = {
   getTasks,
