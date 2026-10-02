@@ -66,18 +66,22 @@ function startDisplay() {
   displayProcess.stdout.on(
     "data",
     data => {
+
       console.log(
         `[Xvfb] ${data}`
       );
+
     }
   );
 
   displayProcess.stderr.on(
     "data",
     data => {
+
       console.error(
         `[Xvfb] ${data}`
       );
+
     }
   );
 
@@ -90,11 +94,13 @@ function startDisplay() {
       );
 
       displayProcess = null;
+
     }
   );
 
   process.env.DISPLAY = ":99";
 }
+
 
 /*
  * ============================
@@ -120,6 +126,7 @@ function startWindowManager() {
         ...process.env,
         DISPLAY: ":99"
       },
+
       stdio: [
         "ignore",
         "pipe",
@@ -131,21 +138,35 @@ function startWindowManager() {
   windowManagerProcess.stdout.on(
     "data",
     data => {
+
       console.log(
         `[Fluxbox] ${data}`
       );
+
     }
   );
 
   windowManagerProcess.stderr.on(
     "data",
     data => {
+
       console.error(
         `[Fluxbox] ${data}`
       );
+
+    }
+  );
+
+  windowManagerProcess.on(
+    "exit",
+    () => {
+
+      windowManagerProcess = null;
+
     }
   );
 }
+
 
 /*
  * ============================
@@ -155,8 +176,28 @@ function startWindowManager() {
 
 async function getBrowserContext() {
 
+  /*
+   * Chromium 已经启动
+   */
+
   if (browserContext) {
-    return browserContext;
+
+    /*
+     * 检查 Chromium 是否仍然有效
+     */
+
+    try {
+
+      browserContext.pages();
+
+      return browserContext;
+
+    } catch (error) {
+
+      browserContext = null;
+
+    }
+
   }
 
   startDisplay();
@@ -195,6 +236,20 @@ async function getBrowserContext() {
       }
     );
 
+  /*
+   * Chromium 意外关闭时，
+   * 清空引用，允许下次重新启动。
+   */
+
+  browserContext.on(
+    "close",
+    () => {
+
+      browserContext = null;
+
+    }
+  );
+
   addLog(
     "Chromium 启动成功"
   );
@@ -202,10 +257,21 @@ async function getBrowserContext() {
   return browserContext;
 }
 
+
 /*
  * ============================
  * Visit
  * ============================
+ *
+ * 每次访问创建独立 Page。
+ *
+ * 多任务时：
+ *
+ * Task #1 → Page 1
+ * Task #2 → Page 2
+ * Task #3 → Page 3
+ *
+ * 所有 Page 共用同一个 Chromium。
  */
 
 async function visit(
@@ -213,30 +279,31 @@ async function visit(
   staySeconds = 10
 ) {
 
-  const context =
-    await getBrowserContext();
-
-  let page;
+  let context;
+  let page = null;
 
   try {
 
-    const pages =
-      context.pages();
+    context =
+      await getBrowserContext();
 
-    if (pages.length > 0) {
+    /*
+     * 每个任务创建自己的 Page。
+     *
+     * 不再使用：
+     *
+     * context.pages()[0]
+     *
+     * 避免多个任务抢同一个页面。
+     */
 
-      page = pages[0];
-
-    } else {
-
-      page =
-        await context.newPage();
-
-    }
+    page =
+      await context.newPage();
 
     /*
      * 不在日志中输出 URL
      */
+
     addLog(
       "正在访问目标网页"
     );
@@ -246,13 +313,16 @@ async function visit(
       {
         waitUntil:
           "domcontentloaded",
-        timeout: 60000
+
+        timeout:
+          60000
       }
     );
 
     /*
      * 不在日志中输出 URL
      */
+
     addLog(
       "页面加载完成"
     );
@@ -276,9 +346,10 @@ async function visit(
   } catch (error) {
 
     /*
-     * 错误信息中可能包含 URL，
-     * 因此这里也不直接输出 error.message。
+     * 错误信息可能包含 URL，
+     * 所以 Render 日志中不直接输出 error.message。
      */
+
     addLog(
       `访问失败：${error.name || "未知错误"}`,
       "error"
@@ -291,10 +362,45 @@ async function visit(
 
     return {
       success: false,
-      error: error.message
+      error:
+        error.message
     };
+
+  } finally {
+
+    /*
+     * 当前任务完成后关闭自己的 Page。
+     *
+     * 不关闭 Chromium。
+     *
+     * 这样：
+     *
+     * Task #1 完成 → 关闭 Page #1
+     * Task #2 完成 → 关闭 Page #2
+     *
+     * Chromium 继续保持运行。
+     */
+
+    if (page) {
+
+      try {
+
+        await page.close();
+
+      } catch (error) {
+
+        console.error(
+          "[Browser] Page close error:",
+          error.message
+        );
+
+      }
+
+    }
+
   }
 }
+
 
 /*
  * ============================
@@ -327,6 +433,7 @@ async function closeBrowser() {
     windowManagerProcess.kill();
 
     windowManagerProcess = null;
+
   }
 
   if (displayProcess) {
@@ -334,12 +441,20 @@ async function closeBrowser() {
     displayProcess.kill();
 
     displayProcess = null;
+
   }
 
   addLog(
     "浏览器已关闭"
   );
 }
+
+
+/*
+ * ============================
+ * Export
+ * ============================
+ */
 
 module.exports = {
   visit,
