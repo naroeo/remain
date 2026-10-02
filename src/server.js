@@ -6,7 +6,6 @@ const {
   getTask,
   createTask,
   updateTask,
-  recordVisit,
   deleteTask
 } = require("./database");
 
@@ -16,10 +15,18 @@ const {
 } = require("./scheduler");
 
 const {
-  subscribe,
+  addLog,
   getLogs,
-  addLog
+  clearLogs,
+  subscribe
 } = require("./logger");
+
+
+/*
+ * ============================
+ * Express
+ * ============================
+ */
 
 const app = express();
 
@@ -29,194 +36,16 @@ const PORT =
 const ADMIN_PASSWORD =
   process.env.ADMIN_PASSWORD;
 
+
 /*
-
-============================
-
-Middleware
-
-============================
-*/
+ * ============================
+ * Middleware
+ * ============================
+ */
 
 app.use(
   express.json()
 );
-
-/*
-
-============================
-
-Login
-
-============================
-*/
-
-app.post(
-  "/api/login",
-  (req, res) => {
-
-    const {
-      password
-    } = req.body || {};
-
-    if (!ADMIN_PASSWORD) {
-
-      console.error(
-        "[Auth] ADMIN_PASSWORD is not configured"
-      );
-
-      return res
-        .status(500)
-        .json({
-          error:
-            "Server password is not configured"
-        });
-
-    }
-
-    if (
-      typeof password !== "string" ||
-      password !== ADMIN_PASSWORD
-    ) {
-
-      return res
-        .status(401)
-        .json({
-          error:
-            "密码错误"
-        });
-
-    }
-
-    /*
-     * 简单 Token。
-     *
-     * Token 不包含密码，
-     * 浏览器登录成功后保存。
-     */
-    const token =
-      Buffer
-        .from(
-          `${Date.now()}:${ADMIN_PASSWORD}`
-        )
-        .toString("base64");
-
-    res.json({
-      success: true,
-      token
-    });
-
-  }
-);
-
-/*
-
-============================
-
-Authentication
-
-============================
-*/
-
-function checkAuth(req, res, next) {
-
-  /*
-   * 登录接口本身不需要认证
-   */
-  if (
-    req.path === "/api/login"
-  ) {
-    return next();
-  }
-
-  const authorization =
-    req.headers.authorization || "";
-
-  const token =
-    authorization.startsWith(
-      "Bearer "
-    )
-      ? authorization.slice(7)
-      : "";
-
-  if (!token) {
-
-    return res
-      .status(401)
-      .json({
-        error:
-          "Unauthorized"
-      });
-
-  }
-
-  try {
-
-    const decoded =
-      Buffer
-        .from(
-          token,
-          "base64"
-        )
-        .toString("utf8");
-
-    /*
-     * Token 必须包含当前密码。
-     *
-     * 如果 Render 环境变量密码改变，
-     * 之前的 Token 会自动失效。
-     */
-    if (
-      !ADMIN_PASSWORD ||
-      !decoded.endsWith(
-        `:${ADMIN_PASSWORD}`
-      )
-    ) {
-
-      return res
-        .status(401)
-        .json({
-          error:
-            "Unauthorized"
-        });
-
-    }
-
-    next();
-
-  } catch (error) {
-
-    return res
-      .status(401)
-      .json({
-        error:
-          "Unauthorized"
-      });
-
-  }
-
-}
-
-/*
-
-所有 /api/* 接口，
-
-除登录接口外，都需要密码。
-*/
-
-app.use(
-  "/api",
-  checkAuth
-);
-
-/*
-
-静态网页暂时正常提供。
-
-下一步前端会自动显示登录页面，
-
-未登录不会显示任务内容。
-*/
 
 app.use(
   express.static(
@@ -228,16 +57,210 @@ app.use(
   )
 );
 
+
 /*
+ * ============================
+ * Authentication
+ * ============================
+ */
 
-============================
+function createToken() {
 
-Tasks API
+  return Buffer
+    .from(
+      `${Date.now()}:${ADMIN_PASSWORD}`
+    )
+    .toString("base64");
+}
 
-============================
-*/
 
-// 获取所有任务
+function checkAuth(
+  req,
+  res,
+  next
+) {
+
+  /*
+   * 登录接口不需要 Token
+   */
+
+  if (
+    req.path === "/login"
+  ) {
+    return next();
+  }
+
+
+  const authorization =
+    req.headers.authorization || "";
+
+
+  if (
+    !authorization.startsWith(
+      "Bearer "
+    )
+  ) {
+
+    return res
+      .status(401)
+      .json({
+        error:
+          "未登录或登录已失效"
+      });
+  }
+
+
+  const token =
+    authorization.slice(7);
+
+
+  if (!token) {
+
+    return res
+      .status(401)
+      .json({
+        error:
+          "未登录或登录已失效"
+      });
+  }
+
+
+  /*
+   * 当前版本使用时间 + 密码
+   * 生成登录 Token。
+   *
+   * 这里只需要验证 Token 是否
+   * 能够还原出当前密码。
+   */
+
+  try {
+
+    const decoded =
+      Buffer
+        .from(
+          token,
+          "base64"
+        )
+        .toString("utf8");
+
+
+    const separator =
+      decoded.indexOf(":");
+
+
+    if (
+      separator === -1
+    ) {
+      throw new Error(
+        "Invalid token"
+      );
+    }
+
+
+    const password =
+      decoded.slice(
+        separator + 1
+      );
+
+
+    if (
+      password !==
+      ADMIN_PASSWORD
+    ) {
+      throw new Error(
+        "Invalid token"
+      );
+    }
+
+
+    next();
+
+  } catch (error) {
+
+    return res
+      .status(401)
+      .json({
+        error:
+          "登录已失效，请重新登录"
+      });
+  }
+}
+
+
+app.use(
+  "/api",
+  checkAuth
+);
+
+
+/*
+ * ============================
+ * Login
+ * ============================
+ */
+
+app.post(
+  "/api/login",
+  (req, res) => {
+
+    const {
+      password
+    } = req.body || {};
+
+
+    if (
+      !ADMIN_PASSWORD
+    ) {
+
+      return res
+        .status(500)
+        .json({
+          error:
+            "服务器未配置 ADMIN_PASSWORD"
+        });
+    }
+
+
+    if (
+      password !==
+      ADMIN_PASSWORD
+    ) {
+
+      addLog(
+        "登录失败",
+        "warn"
+      );
+
+      return res
+        .status(401)
+        .json({
+          error:
+            "密码错误"
+        });
+    }
+
+
+    const token =
+      createToken();
+
+
+    addLog(
+      "管理员登录成功"
+    );
+
+
+    return res.json({
+      token
+    });
+  }
+);
+
+
+/*
+ * ============================
+ * Tasks - GET
+ * ============================
+ */
 
 app.get(
   "/api/tasks",
@@ -248,40 +271,63 @@ app.get(
       const tasks =
         getTasks();
 
-      res.json(tasks);
+      return res.json(
+        tasks
+      );
 
     } catch (error) {
 
       console.error(
-        "[API] Get tasks error:",
+        "[API] GET /api/tasks",
         error
       );
 
-      res.status(500).json({
-        error:
-          "Failed to get tasks"
-      });
-
+      return res
+        .status(500)
+        .json({
+          error:
+            "读取任务失败"
+        });
     }
-
   }
 );
 
-// 获取单个任务
+
+/*
+ * ============================
+ * Task - GET
+ * ============================
+ */
 
 app.get(
   "/api/tasks/:id",
   (req, res) => {
 
-    try {
+    const id =
+      Number(
+        req.params.id
+      );
 
-      const id =
-        Number(
-          req.params.id
-        );
+
+    if (
+      !Number.isInteger(id) ||
+      id <= 0
+    ) {
+
+      return res
+        .status(400)
+        .json({
+          error:
+            "无效的任务 ID"
+        });
+    }
+
+
+    try {
 
       const task =
         getTask(id);
+
 
       if (!task) {
 
@@ -289,154 +335,232 @@ app.get(
           .status(404)
           .json({
             error:
-              "Task not found"
+              "任务不存在"
           });
-
       }
 
-      res.json(task);
+
+      return res.json(
+        task
+      );
 
     } catch (error) {
 
       console.error(
-        "[API] Get task error:",
+        "[API] GET /api/tasks/:id",
         error
       );
 
-      res.status(500).json({
-        error:
-          "Failed to get task"
-      });
-
+      return res
+        .status(500)
+        .json({
+          error:
+            "读取任务失败"
+        });
     }
-
   }
 );
 
-// 创建任务
+
+/*
+ * ============================
+ * Task - CREATE
+ * ============================
+ */
 
 app.post(
   "/api/tasks",
   (req, res) => {
 
+    const {
+      name,
+      url,
+      interval_minutes,
+      stay_seconds
+    } = req.body || {};
+
+
+    const taskName =
+      String(
+        name ?? ""
+      ).trim();
+
+    const taskUrl =
+      String(
+        url ?? ""
+      ).trim();
+
+    const interval =
+      Number(
+        interval_minutes
+      );
+
+    const stay =
+      Number(
+        stay_seconds
+      );
+
+
+    /*
+     * 名称
+     */
+
+    if (
+      !taskName
+    ) {
+
+      return res
+        .status(400)
+        .json({
+          error:
+            "请输入任务名称"
+        });
+    }
+
+
+    /*
+     * URL
+     */
+
+    if (
+      !taskUrl
+    ) {
+
+      return res
+        .status(400)
+        .json({
+          error:
+            "请输入 URL"
+        });
+    }
+
+
     try {
 
-      const {
-        url,
-        interval_minutes,
-        stay_seconds
-      } = req.body;
+      new URL(
+        taskUrl
+      );
 
-      if (!url) {
+    } catch (error) {
 
-        return res
-          .status(400)
-          .json({
-            error:
-              "URL is required"
-          });
+      return res
+        .status(400)
+        .json({
+          error:
+            "URL 格式不正确"
+        });
+    }
 
-      }
 
-      const interval =
-        Number(
-          interval_minutes || 5
-        );
+    /*
+     * 间隔
+     */
 
-      const stay =
-        Number(
-          stay_seconds || 10
-        );
+    if (
+      !Number.isFinite(interval) ||
+      interval <= 0
+    ) {
 
-      if (
-        !Number.isFinite(interval) ||
-        interval <= 0
-      ) {
+      return res
+        .status(400)
+        .json({
+          error:
+            "执行间隔必须大于 0 分钟"
+        });
+    }
 
-        return res
-          .status(400)
-          .json({
-            error:
-              "Invalid interval"
-          });
 
-      }
+    /*
+     * 停留时间
+     */
 
-      if (
-        !Number.isFinite(stay) ||
-        stay < 0
-      ) {
+    if (
+      !Number.isFinite(stay) ||
+      stay < 0
+    ) {
 
-        return res
-          .status(400)
-          .json({
-            error:
-              "Invalid stay time"
-          });
+      return res
+        .status(400)
+        .json({
+          error:
+            "停留时间不能小于 0 秒"
+        });
+    }
 
-      }
+
+    try {
 
       const task =
         createTask(
-          url,
+          taskName,
+          taskUrl,
           interval,
           stay
         );
 
-      /*
-       * Render 日志不显示 URL
-       */
 
       addLog(
         `创建任务 #${task.id}`
       );
 
-      res.json(task);
+
+      return res
+        .status(201)
+        .json(task);
 
     } catch (error) {
 
       console.error(
-        "[API] Create task error:",
+        "[API] POST /api/tasks",
         error
       );
 
-      addLog(
-        `创建任务失败：${error.message}`,
-        "error"
-      );
-
-      res.status(500).json({
-        error:
-          "Failed to create task"
-      });
-
+      return res
+        .status(500)
+        .json({
+          error:
+            "创建任务失败"
+        });
     }
-
   }
 );
 
+
 /*
-
-============================
-
-Start Task
-
-============================
-*/
+ * ============================
+ * Task - START
+ * ============================
+ */
 
 app.post(
   "/api/tasks/:id/start",
   (req, res) => {
 
-    try {
+    const id =
+      Number(
+        req.params.id
+      );
 
-      const id =
-        Number(
-          req.params.id
-        );
+
+    if (
+      !Number.isInteger(id) ||
+      id <= 0
+    ) {
+
+      return res
+        .status(400)
+        .json({
+          error:
+            "无效的任务 ID"
+        });
+    }
+
+
+    try {
 
       const task =
         getTask(id);
+
 
       if (!task) {
 
@@ -444,12 +568,12 @@ app.post(
           .status(404)
           .json({
             error:
-              "Task not found"
+              "任务不存在"
           });
-
       }
 
-      const updatedTask =
+
+      const updated =
         updateTask(
           id,
           {
@@ -457,64 +581,69 @@ app.post(
           }
         );
 
-      const result =
-        updatedTask ||
-        getTask(id);
-
-      /*
-       * Render 日志不显示 URL
-       */
 
       addLog(
         `启动任务 #${id}`
       );
 
-      res.json(result);
+
+      return res.json(
+        updated
+      );
 
     } catch (error) {
 
       console.error(
-        "[API] Start task error:",
+        "[API] START",
         error
       );
 
-      addLog(
-        `启动任务失败：${error.message}`,
-        "error"
-      );
-
-      res.status(500).json({
-        error:
-          "Failed to start task"
-      });
-
+      return res
+        .status(500)
+        .json({
+          error:
+            "启动任务失败"
+        });
     }
-
   }
 );
 
+
 /*
-
-============================
-
-Stop Task
-
-============================
-*/
+ * ============================
+ * Task - STOP
+ * ============================
+ */
 
 app.post(
   "/api/tasks/:id/stop",
   (req, res) => {
 
-    try {
+    const id =
+      Number(
+        req.params.id
+      );
 
-      const id =
-        Number(
-          req.params.id
-        );
+
+    if (
+      !Number.isInteger(id) ||
+      id <= 0
+    ) {
+
+      return res
+        .status(400)
+        .json({
+          error:
+            "无效的任务 ID"
+        });
+    }
+
+
+    try {
 
       const task =
         getTask(id);
+
 
       if (!task) {
 
@@ -522,12 +651,12 @@ app.post(
           .status(404)
           .json({
             error:
-              "Task not found"
+              "任务不存在"
           });
-
       }
 
-      const updatedTask =
+
+      const updated =
         updateTask(
           id,
           {
@@ -535,63 +664,69 @@ app.post(
           }
         );
 
-      const result =
-        updatedTask ||
-        getTask(id);
 
       addLog(
         `停止任务 #${id}`
       );
 
-      res.json(result);
+
+      return res.json(
+        updated
+      );
 
     } catch (error) {
 
       console.error(
-        "[API] Stop task error:",
+        "[API] STOP",
         error
       );
 
-      addLog(
-        `停止任务失败：${error.message}`,
-        "error"
-      );
-
-      res.status(500).json({
-        error:
-          "Failed to stop task"
-      });
-
+      return res
+        .status(500)
+        .json({
+          error:
+            "停止任务失败"
+        });
     }
-
   }
 );
 
+
 /*
-
-============================
-
-Update Task
-
-============================
-*/
+ * ============================
+ * Task - UPDATE
+ * ============================
+ */
 
 app.put(
   "/api/tasks/:id",
   (req, res) => {
 
+    const id =
+      Number(
+        req.params.id
+      );
+
+
+    if (
+      !Number.isInteger(id) ||
+      id <= 0
+    ) {
+
+      return res
+        .status(400)
+        .json({
+          error:
+            "无效的任务 ID"
+        });
+    }
+
+
     try {
 
-      const id =
-        Number(
-          req.params.id
-        );
-
       const task =
-        updateTask(
-          id,
-          req.body
-        );
+        getTask(id);
+
 
       if (!task) {
 
@@ -599,61 +734,227 @@ app.put(
           .status(404)
           .json({
             error:
-              "Task not found"
+              "任务不存在"
           });
-
       }
 
+
+      const fields =
+        req.body || {};
+
+
+      /*
+       * 任务名称
+       */
+
+      if (
+        fields.name !== undefined
+      ) {
+
+        const name =
+          String(
+            fields.name
+          ).trim();
+
+
+        if (!name) {
+
+          return res
+            .status(400)
+            .json({
+              error:
+                "任务名称不能为空"
+            });
+        }
+
+
+        fields.name =
+          name;
+      }
+
+
+      /*
+       * URL
+       */
+
+      if (
+        fields.url !== undefined
+      ) {
+
+        const url =
+          String(
+            fields.url
+          ).trim();
+
+
+        if (!url) {
+
+          return res
+            .status(400)
+            .json({
+              error:
+                "请输入 URL"
+            });
+        }
+
+
+        try {
+
+          new URL(url);
+
+        } catch (error) {
+
+          return res
+            .status(400)
+            .json({
+              error:
+                "URL 格式不正确"
+            });
+        }
+
+
+        fields.url =
+          url;
+      }
+
+
+      /*
+       * 执行间隔
+       */
+
+      if (
+        fields.interval_minutes !==
+        undefined
+      ) {
+
+        const interval =
+          Number(
+            fields.interval_minutes
+          );
+
+
+        if (
+          !Number.isFinite(interval) ||
+          interval <= 0
+        ) {
+
+          return res
+            .status(400)
+            .json({
+              error:
+                "执行间隔必须大于 0 分钟"
+            });
+        }
+
+
+        fields.interval_minutes =
+          interval;
+      }
+
+
+      /*
+       * 停留时间
+       */
+
+      if (
+        fields.stay_seconds !==
+        undefined
+      ) {
+
+        const stay =
+          Number(
+            fields.stay_seconds
+          );
+
+
+        if (
+          !Number.isFinite(stay) ||
+          stay < 0
+        ) {
+
+          return res
+            .status(400)
+            .json({
+              error:
+                "停留时间不能小于 0 秒"
+            });
+        }
+
+
+        fields.stay_seconds =
+          stay;
+      }
+
+
+      const updated =
+        updateTask(
+          id,
+          fields
+        );
+
+
       addLog(
-        `更新任务 #${task.id}`
+        `更新任务 #${id}`
       );
 
-      res.json(task);
+
+      return res.json(
+        updated
+      );
 
     } catch (error) {
 
       console.error(
-        "[API] Update task error:",
+        "[API] UPDATE",
         error
       );
 
-      addLog(
-        `更新任务失败：${error.message}`,
-        "error"
-      );
-
-      res.status(500).json({
-        error:
-          "Failed to update task"
-      });
-
+      return res
+        .status(500)
+        .json({
+          error:
+            "更新任务失败"
+        });
     }
-
   }
 );
 
+
 /*
-
-============================
-
-Delete Task
-
-============================
-*/
+ * ============================
+ * Task - DELETE
+ * ============================
+ */
 
 app.delete(
   "/api/tasks/:id",
   (req, res) => {
 
-    try {
+    const id =
+      Number(
+        req.params.id
+      );
 
-      const id =
-        Number(
-          req.params.id
-        );
+
+    if (
+      !Number.isInteger(id) ||
+      id <= 0
+    ) {
+
+      return res
+        .status(400)
+        .json({
+          error:
+            "无效的任务 ID"
+        });
+    }
+
+
+    try {
 
       const task =
         getTask(id);
+
 
       if (!task) {
 
@@ -661,51 +962,46 @@ app.delete(
           .status(404)
           .json({
             error:
-              "Task not found"
+              "任务不存在"
           });
-
       }
 
+
       deleteTask(id);
+
 
       addLog(
         `删除任务 #${id}`
       );
 
-      res.json({
+
+      return res.json({
         success: true
       });
 
     } catch (error) {
 
       console.error(
-        "[API] Delete task error:",
+        "[API] DELETE",
         error
       );
 
-      addLog(
-        `删除任务失败：${error.message}`,
-        "error"
-      );
-
-      res.status(500).json({
-        error:
-          "Failed to delete task"
-      });
-
+      return res
+        .status(500)
+        .json({
+          error:
+            "删除任务失败"
+        });
     }
-
   }
 );
 
+
 /*
-
-============================
-
-Logs API
-
-============================
-*/
+ * ============================
+ * Logs - GET
+ * ============================
+ */
 
 app.get(
   "/api/logs",
@@ -713,88 +1009,148 @@ app.get(
 
     try {
 
-      res.json(
+      return res.json(
         getLogs()
       );
 
     } catch (error) {
 
       console.error(
-        "[API] Get logs error:",
+        "[API] GET /api/logs",
         error
       );
 
-      res.status(500).json({
-        error:
-          "Failed to get logs"
-      });
-
+      return res
+        .status(500)
+        .json({
+          error:
+            "读取日志失败"
+        });
     }
-
   }
 );
 
-// 实时日志 SSE
+
+/*
+ * ============================
+ * Logs - CLEAR
+ * ============================
+ */
+
+app.delete(
+  "/api/logs",
+  (req, res) => {
+
+    try {
+
+      clearLogs();
+
+      addLog(
+        "日志已清空"
+      );
+
+
+      return res.json({
+        success: true
+      });
+
+    } catch (error) {
+
+      console.error(
+        "[API] DELETE /api/logs",
+        error
+      );
+
+      return res
+        .status(500)
+        .json({
+          error:
+            "清空日志失败"
+        });
+    }
+  }
+);
+
+
+/*
+ * ============================
+ * Logs - SSE
+ * ============================
+ */
 
 app.get(
   "/api/logs/stream",
   (req, res) => {
 
-    try {
+    res.setHeader(
+      "Content-Type",
+      "text/event-stream"
+    );
 
-      subscribe(res);
+    res.setHeader(
+      "Cache-Control",
+      "no-cache"
+    );
 
-    } catch (error) {
+    res.setHeader(
+      "Connection",
+      "keep-alive"
+    );
 
-      console.error(
-        "[API] Log stream error:",
-        error
+    res.flushHeaders();
+
+
+    const unsubscribe =
+      subscribe(
+        log => {
+
+          res.write(
+            `data: ${JSON.stringify(log)}\n\n`
+          );
+
+        }
       );
 
-      if (!res.headersSent) {
 
-        res.status(500).json({
-          error:
-            "Failed to subscribe logs"
-        });
+    req.on(
+      "close",
+      () => {
+
+        unsubscribe();
 
       }
-
-    }
-
+    );
   }
 );
 
+
 /*
-
-============================
-
-Health Check
-
-============================
-*/
+ * ============================
+ * Frontend
+ * ============================
+ */
 
 app.get(
-  "/api/health",
+  "*",
   (req, res) => {
 
-    res.json({
-      status: "ok",
-      time:
-        new Date().toISOString()
-    });
-
+    res.sendFile(
+      path.join(
+        __dirname,
+        "..",
+        "public",
+        "index.html"
+      )
+    );
   }
 );
 
+
 /*
-
-============================
-
-Start Server
-
-============================
-*/
+ * ============================
+ * Start Server
+ * ============================
+ */
 
 const server =
   app.listen(
@@ -802,11 +1158,11 @@ const server =
     () => {
 
       console.log(
-        `Remain running on port ${PORT}`
+        `Remain server listening on port ${PORT}`
       );
 
       addLog(
-        `Remain 服务启动，端口 ${PORT}`
+        `服务启动，监听端口 ${PORT}`
       );
 
       startScheduler();
@@ -814,16 +1170,14 @@ const server =
     }
   );
 
+
 /*
+ * ============================
+ * Graceful Shutdown
+ * ============================
+ */
 
-============================
-
-Graceful Shutdown
-
-============================
-*/
-
-function shutdown(
+async function shutdown(
   signal
 ) {
 
@@ -835,17 +1189,23 @@ function shutdown(
     `收到 ${signal}，正在停止服务`
   );
 
+
   stopScheduler();
+
 
   server.close(
     () => {
+
+      console.log(
+        "HTTP server closed"
+      );
 
       process.exit(0);
 
     }
   );
-
 }
+
 
 process.on(
   "SIGTERM",
