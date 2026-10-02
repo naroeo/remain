@@ -1,4 +1,3 @@
-```javascript
 const TOKEN_KEY = "remain_token";
 
 let logStreamController = null;
@@ -26,8 +25,11 @@ function clearToken() {
 // =========================
 
 function showLoginPage() {
-  const loginPage = document.getElementById("login-page");
-  const appPage = document.getElementById("app-page");
+  const loginPage =
+    document.getElementById("login-page");
+
+  const appPage =
+    document.getElementById("app-page");
 
   if (loginPage) {
     loginPage.classList.remove("hidden");
@@ -38,9 +40,13 @@ function showLoginPage() {
   }
 }
 
+
 function showAppPage() {
-  const loginPage = document.getElementById("login-page");
-  const appPage = document.getElementById("app-page");
+  const loginPage =
+    document.getElementById("login-page");
+
+  const appPage =
+    document.getElementById("app-page");
 
   if (loginPage) {
     loginPage.classList.add("hidden");
@@ -59,10 +65,14 @@ function showAppPage() {
 async function apiFetch(url, options = {}) {
   const token = getToken();
 
-  const headers = new Headers(options.headers || {});
+  const headers =
+    new Headers(options.headers || {});
 
   if (token) {
-    headers.set("Authorization", `Bearer ${token}`);
+    headers.set(
+      "Authorization",
+      `Bearer ${token}`
+    );
   }
 
   if (
@@ -70,13 +80,17 @@ async function apiFetch(url, options = {}) {
     typeof options.body === "string" &&
     !headers.has("Content-Type")
   ) {
-    headers.set("Content-Type", "application/json");
+    headers.set(
+      "Content-Type",
+      "application/json"
+    );
   }
 
-  const response = await fetch(url, {
-    ...options,
-    headers
-  });
+  const response =
+    await fetch(url, {
+      ...options,
+      headers
+    });
 
   if (response.status === 401) {
     clearToken();
@@ -88,7 +102,9 @@ async function apiFetch(url, options = {}) {
 
     showLoginPage();
 
-    throw new Error("登录已失效，请重新登录");
+    throw new Error(
+      "登录已失效，请重新登录"
+    );
   }
 
   return response;
@@ -99,74 +115,110 @@ async function apiFetch(url, options = {}) {
 // 登录
 // =========================
 
-const loginForm = document.getElementById("login-form");
-const loginPassword = document.getElementById("login-password");
-const loginError = document.getElementById("login-error");
+const loginForm =
+  document.getElementById("login-form");
+
+const loginPassword =
+  document.getElementById("login-password");
+
+const loginError =
+  document.getElementById("login-error");
+
 
 if (loginForm) {
-  loginForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
+  loginForm.addEventListener(
+    "submit",
+    async (event) => {
 
-    const password =
-      loginPassword ? loginPassword.value : "";
+      event.preventDefault();
 
-    if (!password) {
-      if (loginError) {
-        loginError.textContent = "请输入密码";
+      const password =
+        loginPassword
+          ? loginPassword.value
+          : "";
+
+      if (!password) {
+        if (loginError) {
+          loginError.textContent =
+            "请输入密码";
+        }
+
+        return;
       }
 
-      return;
-    }
+      if (loginError) {
+        loginError.textContent = "";
+      }
 
-    if (loginError) {
-      loginError.textContent = "";
-    }
+      try {
 
-    try {
-      const response = await fetch("/api/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          password
-        })
-      });
+        const response =
+          await fetch(
+            "/api/login",
+            {
+              method: "POST",
 
-      const data = await response.json();
+              headers: {
+                "Content-Type":
+                  "application/json"
+              },
 
-      if (!response.ok) {
-        throw new Error(
-          data.error || "登录失败"
+              body: JSON.stringify({
+                password
+              })
+            }
+          );
+
+
+        const data =
+          await response.json();
+
+
+        if (!response.ok) {
+          throw new Error(
+            data.error || "登录失败"
+          );
+        }
+
+
+        if (!data.token) {
+          throw new Error(
+            "服务器没有返回登录 Token"
+          );
+        }
+
+
+        setToken(data.token);
+
+
+        if (loginPassword) {
+          loginPassword.value = "";
+        }
+
+
+        showAppPage();
+
+
+        await loadTasks();
+
+        await loadLogs();
+
+        connectLogStream();
+
+      } catch (error) {
+
+        console.error(
+          "[Login]",
+          error
         );
-      }
 
-      if (!data.token) {
-        throw new Error("服务器没有返回登录 Token");
-      }
-
-      setToken(data.token);
-
-      if (loginPassword) {
-        loginPassword.value = "";
-      }
-
-      showAppPage();
-
-      await loadTasks();
-      await loadLogs();
-
-      connectLogStream();
-
-    } catch (error) {
-      console.error("[Login]", error);
-
-      if (loginError) {
-        loginError.textContent =
-          error.message || "登录失败";
+        if (loginError) {
+          loginError.textContent =
+            error.message || "登录失败";
+        }
       }
     }
-  });
+  );
 }
 
 
@@ -175,19 +227,26 @@ if (loginForm) {
 // =========================
 
 const logoutButton =
-  document.getElementById("logout-button");
+  document.getElementById(
+    "logout-button"
+  );
+
 
 if (logoutButton) {
-  logoutButton.addEventListener("click", () => {
-    clearToken();
+  logoutButton.addEventListener(
+    "click",
+    () => {
 
-    if (logStreamController) {
-      logStreamController.abort();
-      logStreamController = null;
+      clearToken();
+
+      if (logStreamController) {
+        logStreamController.abort();
+        logStreamController = null;
+      }
+
+      showLoginPage();
     }
-
-    showLoginPage();
-  });
+  );
 }
 
 
@@ -197,22 +256,42 @@ if (logoutButton) {
 
 function escapeHtml(value) {
   return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+    .replaceAll(
+      "&",
+      "&amp;"
+    )
+    .replaceAll(
+      "<",
+      "&lt;"
+    )
+    .replaceAll(
+      ">",
+      "&gt;"
+    )
+    .replaceAll(
+      '"',
+      "&quot;"
+    )
+    .replaceAll(
+      "'",
+      "&#039;"
+    );
 }
 
 
 // =========================
-// Tasks
+// 获取任务
 // =========================
 
 async function loadTasks() {
+
   try {
+
     const response =
-      await apiFetch("/api/tasks");
+      await apiFetch(
+        "/api/tasks"
+      );
+
 
     if (!response.ok) {
       throw new Error(
@@ -220,12 +299,15 @@ async function loadTasks() {
       );
     }
 
+
     const tasks =
       await response.json();
+
 
     renderTasks(tasks);
 
   } catch (error) {
+
     console.error(
       "[Tasks] Load error:",
       error
@@ -234,17 +316,31 @@ async function loadTasks() {
 }
 
 
+// =========================
+// 渲染任务
+// =========================
+
 function renderTasks(tasks) {
+
   const container =
-    document.getElementById("tasks");
+    document.getElementById(
+      "tasks"
+    );
+
 
   if (!container) {
     return;
   }
 
+
   container.innerHTML = "";
 
-  if (!Array.isArray(tasks) || tasks.length === 0) {
+
+  if (
+    !Array.isArray(tasks) ||
+    tasks.length === 0
+  ) {
+
     container.innerHTML = `
       <div class="empty-state">
         暂无任务
@@ -254,141 +350,232 @@ function renderTasks(tasks) {
     return;
   }
 
-  tasks.forEach((task) => {
-    const card =
-      document.createElement("div");
 
-    card.className =
-      "task-card";
+  tasks.forEach(
+    (task) => {
 
-    const enabled =
-      Number(task.enabled) === 1;
+      const card =
+        document.createElement(
+          "div"
+        );
 
-    card.innerHTML = `
-      <div class="task-info">
-        <div class="task-url">
-          ${escapeHtml(task.url)}
+
+      card.className =
+        "task-card";
+
+
+      const enabled =
+        Number(task.enabled) === 1;
+
+
+      card.innerHTML = `
+
+        <div class="task-info">
+
+          <div class="task-url">
+            ${escapeHtml(task.url)}
+          </div>
+
+          <div class="task-meta">
+
+            <span>
+              间隔：
+              ${task.interval_minutes}
+              分钟
+            </span>
+
+            <span>
+              停留：
+              ${task.stay_seconds}
+              秒
+            </span>
+
+            <span
+              class="${enabled
+                ? "status-on"
+                : "status-off"}"
+            >
+              ${
+                enabled
+                  ? "运行中"
+                  : "已停止"
+              }
+            </span>
+
+          </div>
+
         </div>
 
-        <div class="task-meta">
-          <span>
-            间隔：${task.interval_minutes} 分钟
-          </span>
 
-          <span>
-            停留：${task.stay_seconds} 秒
-          </span>
+        <div class="task-actions">
 
-          <span class="${enabled ? "status-on" : "status-off"}">
-            ${enabled ? "运行中" : "已停止"}
-          </span>
+          ${
+            enabled
+              ? `
+                <button
+                  class="secondary-button"
+                  data-action="stop"
+                  data-id="${task.id}"
+                >
+                  停止
+                </button>
+              `
+              : `
+                <button
+                  class="primary-button"
+                  data-action="start"
+                  data-id="${task.id}"
+                >
+                  启动
+                </button>
+              `
+          }
+
+
+          <button
+            class="danger-button"
+            data-action="delete"
+            data-id="${task.id}"
+          >
+            删除
+          </button>
+
         </div>
-      </div>
 
-      <div class="task-actions">
-        ${
-          enabled
-            ? `
-              <button
-                class="secondary-button"
-                data-action="stop"
-                data-id="${task.id}"
-              >
-                停止
-              </button>
-            `
-            : `
-              <button
-                class="primary-button"
-                data-action="start"
-                data-id="${task.id}"
-              >
-                启动
-              </button>
-            `
-        }
+      `;
 
-        <button
-          class="danger-button"
-          data-action="delete"
-          data-id="${task.id}"
-        >
-          删除
-        </button>
-      </div>
-    `;
 
-    container.appendChild(card);
-  });
+      container.appendChild(
+        card
+      );
+    }
+  );
 }
 
 
 // =========================
-// Task 操作
+// 任务操作
 // =========================
 
 const tasksContainer =
-  document.getElementById("tasks");
+  document.getElementById(
+    "tasks"
+  );
+
 
 if (tasksContainer) {
+
   tasksContainer.addEventListener(
     "click",
     async (event) => {
+
       const button =
-        event.target.closest("button");
+        event.target.closest(
+          "button"
+        );
+
 
       if (!button) {
         return;
       }
 
+
       const action =
         button.dataset.action;
 
+
       const id =
         button.dataset.id;
+
 
       if (!action || !id) {
         return;
       }
 
+
       try {
+
         if (action === "start") {
-          await apiFetch(
-            `/api/tasks/${id}/start`,
-            {
-              method: "POST"
-            }
-          );
+
+          const response =
+            await apiFetch(
+              `/api/tasks/${id}/start`,
+              {
+                method: "POST"
+              }
+            );
+
+
+          if (!response.ok) {
+            const data =
+              await response.json();
+
+            throw new Error(
+              data.error || "启动任务失败"
+            );
+          }
         }
+
 
         if (action === "stop") {
-          await apiFetch(
-            `/api/tasks/${id}/stop`,
-            {
-              method: "POST"
-            }
-          );
+
+          const response =
+            await apiFetch(
+              `/api/tasks/${id}/stop`,
+              {
+                method: "POST"
+              }
+            );
+
+
+          if (!response.ok) {
+            const data =
+              await response.json();
+
+            throw new Error(
+              data.error || "停止任务失败"
+            );
+          }
         }
 
+
         if (action === "delete") {
+
           const confirmed =
-            confirm("确定要删除这个任务吗？");
+            confirm(
+              "确定要删除这个任务吗？"
+            );
+
 
           if (!confirmed) {
             return;
           }
 
-          await apiFetch(
-            `/api/tasks/${id}`,
-            {
-              method: "DELETE"
-            }
-          );
+
+          const response =
+            await apiFetch(
+              `/api/tasks/${id}`,
+              {
+                method: "DELETE"
+              }
+            );
+
+
+          if (!response.ok) {
+            const data =
+              await response.json();
+
+            throw new Error(
+              data.error || "删除任务失败"
+            );
+          }
         }
+
 
         await loadTasks();
 
       } catch (error) {
+
         console.error(
           "[Task Action]",
           error
@@ -408,41 +595,60 @@ if (tasksContainer) {
 // =========================
 
 const taskForm =
-  document.getElementById("taskForm");
+  document.getElementById(
+    "taskForm"
+  );
+
 
 if (taskForm) {
+
   taskForm.addEventListener(
     "submit",
     async (event) => {
+
       event.preventDefault();
+
 
       const formData =
         new FormData(taskForm);
 
+
       const url =
-        String(formData.get("url") || "").trim();
+        String(
+          formData.get("url") || ""
+        ).trim();
+
 
       const intervalMinutes =
         Number(
-          formData.get("interval_minutes") || 5
+          formData.get(
+            "interval_minutes"
+          ) || 5
         );
+
 
       const staySeconds =
         Number(
-          formData.get("stay_seconds") || 10
+          formData.get(
+            "stay_seconds"
+          ) || 10
         );
+
 
       if (!url) {
         alert("请输入 URL");
         return;
       }
 
+
       try {
+
         const response =
           await apiFetch(
             "/api/tasks",
             {
               method: "POST",
+
               body: JSON.stringify({
                 url,
                 interval_minutes:
@@ -453,27 +659,34 @@ if (taskForm) {
             }
           );
 
+
         const data =
           await response.json();
 
+
         if (!response.ok) {
           throw new Error(
-            data.error || "创建任务失败"
+            data.error ||
+            "创建任务失败"
           );
         }
 
+
         taskForm.reset();
+
 
         await loadTasks();
 
       } catch (error) {
+
         console.error(
           "[Task Create]",
           error
         );
 
         alert(
-          error.message || "创建任务失败"
+          error.message ||
+          "创建任务失败"
         );
       }
     }
@@ -482,13 +695,18 @@ if (taskForm) {
 
 
 // =========================
-// Logs
+// 获取日志
 // =========================
 
 async function loadLogs() {
+
   try {
+
     const response =
-      await apiFetch("/api/logs");
+      await apiFetch(
+        "/api/logs"
+      );
+
 
     if (!response.ok) {
       throw new Error(
@@ -496,12 +714,15 @@ async function loadLogs() {
       );
     }
 
+
     const logs =
       await response.json();
+
 
     renderLogs(logs);
 
   } catch (error) {
+
     console.error(
       "[Logs] Load error:",
       error
@@ -510,59 +731,104 @@ async function loadLogs() {
 }
 
 
+// =========================
+// 渲染历史日志
+// =========================
+
 function renderLogs(logs) {
+
   const container =
-    document.getElementById("logs");
+    document.getElementById(
+      "logs"
+    );
+
 
   if (!container) {
     return;
   }
 
+
   container.innerHTML = "";
 
-  if (!Array.isArray(logs) || logs.length === 0) {
+
+  if (
+    !Array.isArray(logs) ||
+    logs.length === 0
+  ) {
     return;
   }
 
-  logs.forEach((log) => {
-    renderLog(log, false);
-  });
+
+  logs.forEach(
+    (log) => {
+      renderLog(
+        log,
+        false
+      );
+    }
+  );
+
 
   container.scrollTop =
     container.scrollHeight;
 }
 
 
-function renderLog(log, scroll = true) {
+// =========================
+// 渲染单条日志
+// =========================
+
+function renderLog(
+  log,
+  scroll = true
+) {
+
   const container =
-    document.getElementById("logs");
+    document.getElementById(
+      "logs"
+    );
+
 
   if (!container) {
     return;
   }
 
+
   const row =
-    document.createElement("div");
+    document.createElement(
+      "div"
+    );
+
 
   row.className =
     `log log-${log.level || "info"}`;
+
 
   const time =
     log.time ||
     log.timestamp ||
     new Date().toISOString();
 
+
   row.innerHTML = `
+
     <span class="log-time">
       ${escapeHtml(time)}
     </span>
 
     <span class="log-message">
-      ${escapeHtml(log.message || "")}
+      ${escapeHtml(
+        log.message || ""
+      )}
     </span>
+
   `;
 
-  container.appendChild(row);
+
+  container.appendChild(
+    row
+  );
+
 
   if (scroll) {
     container.scrollTop =
@@ -572,31 +838,42 @@ function renderLog(log, scroll = true) {
 
 
 // =========================
-// 实时日志 SSE
+// 实时日志
 // =========================
 //
-// EventSource 无法设置 Authorization Header。
-// 所以这里使用 fetch + ReadableStream。
+// 原生 EventSource 无法设置
+// Authorization 请求头。
+//
+// 所以这里使用 fetch +
+// ReadableStream 接收 SSE。
 // =========================
 
 async function connectLogStream() {
+
   if (logStreamController) {
     logStreamController.abort();
   }
 
-  const token = getToken();
+
+  const token =
+    getToken();
+
 
   if (!token) {
     return;
   }
 
+
   const controller =
     new AbortController();
+
 
   logStreamController =
     controller;
 
+
   try {
+
     const response =
       await fetch(
         "/api/logs/stream",
@@ -605,12 +882,15 @@ async function connectLogStream() {
             Authorization:
               `Bearer ${token}`
           },
+
           signal:
             controller.signal
         }
       );
 
+
     if (response.status === 401) {
+
       clearToken();
 
       showLoginPage();
@@ -618,7 +898,268 @@ async function connectLogStream() {
       return;
     }
 
+
     if (!response.ok) {
       throw new Error(
-        `日志连接失
-```
+        `日志连接失败：HTTP ${response.status}`
+      );
+    }
+
+
+    if (!response.body) {
+      throw new Error(
+        "浏览器不支持实时日志流"
+      );
+    }
+
+
+    const reader =
+      response.body.getReader();
+
+
+    const decoder =
+      new TextDecoder();
+
+
+    let buffer = "";
+
+
+    while (true) {
+
+      const {
+        done,
+        value
+      } = await reader.read();
+
+
+      if (done) {
+        break;
+      }
+
+
+      buffer +=
+        decoder.decode(
+          value,
+          {
+            stream: true
+          }
+        );
+
+
+      const events =
+        buffer.split("\n\n");
+
+
+      buffer =
+        events.pop() || "";
+
+
+      for (
+        const event of events
+      ) {
+
+        const lines =
+          event.split("\n");
+
+
+        let data = "";
+
+
+        for (
+          const line of lines
+        ) {
+
+          if (
+            line.startsWith(
+              "data:"
+            )
+          ) {
+
+            data +=
+              line
+                .slice(5)
+                .trim();
+          }
+        }
+
+
+        if (!data) {
+          continue;
+        }
+
+
+        try {
+
+          const log =
+            JSON.parse(data);
+
+
+          if (
+            log.type === "history"
+          ) {
+            continue;
+          }
+
+
+          renderLog(
+            log,
+            true
+          );
+
+        } catch (error) {
+
+          console.error(
+            "[Logs] SSE parse error:",
+            error
+          );
+        }
+      }
+    }
+
+  } catch (error) {
+
+    if (
+      error.name ===
+      "AbortError"
+    ) {
+      return;
+    }
+
+
+    console.error(
+      "[Logs] Stream error:",
+      error
+    );
+
+
+    if (getToken()) {
+
+      setTimeout(
+        () => {
+
+          if (getToken()) {
+            connectLogStream();
+          }
+
+        },
+        5000
+      );
+    }
+
+  } finally {
+
+    if (
+      logStreamController ===
+      controller
+    ) {
+
+      logStreamController =
+        null;
+    }
+  }
+}
+
+
+// =========================
+// 清空日志显示
+// =========================
+
+const clearLogsButton =
+  document.getElementById(
+    "clear-logs-button"
+  );
+
+
+if (clearLogsButton) {
+
+  clearLogsButton.addEventListener(
+    "click",
+    () => {
+
+      const logs =
+        document.getElementById(
+          "logs"
+        );
+
+
+      if (logs) {
+        logs.innerHTML = "";
+      }
+    }
+  );
+}
+
+
+// =========================
+// 手动刷新
+// =========================
+
+const refreshButton =
+  document.getElementById(
+    "refresh-button"
+  );
+
+
+if (refreshButton) {
+
+  refreshButton.addEventListener(
+    "click",
+    async () => {
+
+      await loadTasks();
+
+      await loadLogs();
+
+    }
+  );
+}
+
+
+// =========================
+// 自动刷新任务
+// =========================
+
+setInterval(
+  () => {
+
+    if (!getToken()) {
+      return;
+    }
+
+
+    loadTasks();
+
+  },
+  5000
+);
+
+
+// =========================
+// 页面初始化
+// =========================
+
+(async function init() {
+
+  const token =
+    getToken();
+
+
+  if (!token) {
+
+    showLoginPage();
+
+    return;
+  }
+
+
+  showAppPage();
+
+
+  await loadTasks();
+
+  await loadLogs();
+
+
+  connectLogStream();
+
+})();
