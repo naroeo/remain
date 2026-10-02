@@ -26,6 +26,13 @@ const app = express();
 const PORT =
   process.env.PORT || 3000;
 
+
+/*
+ * ============================
+ * Middleware
+ * ============================
+ */
+
 app.use(
   express.json()
 );
@@ -39,6 +46,7 @@ app.use(
     )
   )
 );
+
 
 /*
  * ============================
@@ -61,6 +69,7 @@ app.get(
     } catch (error) {
 
       console.error(
+        "[API] Get tasks error:",
         error
       );
 
@@ -74,6 +83,7 @@ app.get(
   }
 );
 
+
 // 获取单个任务
 app.get(
   "/api/tasks/:id",
@@ -81,10 +91,13 @@ app.get(
 
     try {
 
-      const task =
-        getTask(
-          Number(req.params.id)
+      const id =
+        Number(
+          req.params.id
         );
+
+      const task =
+        getTask(id);
 
       if (!task) {
 
@@ -102,6 +115,7 @@ app.get(
     } catch (error) {
 
       console.error(
+        "[API] Get task error:",
         error
       );
 
@@ -114,6 +128,7 @@ app.get(
 
   }
 );
+
 
 // 创建任务
 app.post(
@@ -193,7 +208,13 @@ app.post(
     } catch (error) {
 
       console.error(
+        "[API] Create task error:",
         error
+      );
+
+      addLog(
+        `创建任务失败：${error.message}`,
+        "error"
       );
 
       res.status(500).json({
@@ -206,7 +227,157 @@ app.post(
   }
 );
 
-// 更新任务
+
+/*
+ * ============================
+ * Start Task
+ * ============================
+ */
+
+app.post(
+  "/api/tasks/:id/start",
+  (req, res) => {
+
+    try {
+
+      const id =
+        Number(
+          req.params.id
+        );
+
+      const task =
+        getTask(id);
+
+      if (!task) {
+
+        return res
+          .status(404)
+          .json({
+            error:
+              "Task not found"
+          });
+
+      }
+
+      const updatedTask =
+        updateTask(
+          id,
+          {
+            enabled: 1
+          }
+        );
+
+      const result =
+        updatedTask ||
+        getTask(id);
+
+      addLog(
+        `启动任务 #${id}：${task.url}`
+      );
+
+      res.json(result);
+
+    } catch (error) {
+
+      console.error(
+        "[API] Start task error:",
+        error
+      );
+
+      addLog(
+        `启动任务失败：${error.message}`,
+        "error"
+      );
+
+      res.status(500).json({
+        error:
+          "Failed to start task"
+      });
+
+    }
+
+  }
+);
+
+
+/*
+ * ============================
+ * Stop Task
+ * ============================
+ */
+
+app.post(
+  "/api/tasks/:id/stop",
+  (req, res) => {
+
+    try {
+
+      const id =
+        Number(
+          req.params.id
+        );
+
+      const task =
+        getTask(id);
+
+      if (!task) {
+
+        return res
+          .status(404)
+          .json({
+            error:
+              "Task not found"
+          });
+
+      }
+
+      const updatedTask =
+        updateTask(
+          id,
+          {
+            enabled: 0
+          }
+        );
+
+      const result =
+        updatedTask ||
+        getTask(id);
+
+      addLog(
+        `停止任务 #${id}：${task.url}`
+      );
+
+      res.json(result);
+
+    } catch (error) {
+
+      console.error(
+        "[API] Stop task error:",
+        error
+      );
+
+      addLog(
+        `停止任务失败：${error.message}`,
+        "error"
+      );
+
+      res.status(500).json({
+        error:
+          "Failed to stop task"
+      });
+
+    }
+
+  }
+);
+
+
+/*
+ * ============================
+ * Update Task
+ * ============================
+ */
+
 app.put(
   "/api/tasks/:id",
   (req, res) => {
@@ -244,7 +415,13 @@ app.put(
     } catch (error) {
 
       console.error(
+        "[API] Update task error:",
         error
+      );
+
+      addLog(
+        `更新任务失败：${error.message}`,
+        "error"
       );
 
       res.status(500).json({
@@ -257,7 +434,13 @@ app.put(
   }
 );
 
-// 删除任务
+
+/*
+ * ============================
+ * Delete Task
+ * ============================
+ */
+
 app.delete(
   "/api/tasks/:id",
   (req, res) => {
@@ -286,7 +469,7 @@ app.delete(
       deleteTask(id);
 
       addLog(
-        `删除任务 #${id}`
+        `删除任务 #${id}：${task.url}`
       );
 
       res.json({
@@ -296,7 +479,13 @@ app.delete(
     } catch (error) {
 
       console.error(
+        "[API] Delete task error:",
         error
+      );
+
+      addLog(
+        `删除任务失败：${error.message}`,
+        "error"
       );
 
       res.status(500).json({
@@ -309,13 +498,14 @@ app.delete(
   }
 );
 
+
 /*
  * ============================
  * Logs API
  * ============================
  */
 
-// 获取当前历史日志
+// 获取历史日志
 app.get(
   "/api/logs",
   (req, res) => {
@@ -329,6 +519,7 @@ app.get(
     } catch (error) {
 
       console.error(
+        "[API] Get logs error:",
         error
       );
 
@@ -342,15 +533,37 @@ app.get(
   }
 );
 
+
 // 实时日志 SSE
 app.get(
   "/api/logs/stream",
   (req, res) => {
 
-    subscribe(res);
+    try {
+
+      subscribe(res);
+
+    } catch (error) {
+
+      console.error(
+        "[API] Log stream error:",
+        error
+      );
+
+      if (!res.headersSent) {
+
+        res.status(500).json({
+          error:
+            "Failed to subscribe logs"
+        });
+
+      }
+
+    }
 
   }
 );
+
 
 /*
  * ============================
@@ -371,55 +584,74 @@ app.get(
   }
 );
 
+
 /*
  * ============================
  * Start Server
  * ============================
  */
 
-app.listen(
-  PORT,
-  () => {
+const server =
+  app.listen(
+    PORT,
+    () => {
 
-    console.log(
-      `Remain running on port ${PORT}`
-    );
+      console.log(
+        `Remain running on port ${PORT}`
+      );
 
-    addLog(
-      `Remain 服务启动，端口 ${PORT}`
-    );
+      addLog(
+        `Remain 服务启动，端口 ${PORT}`
+      );
 
-    startScheduler();
+      startScheduler();
 
-  }
-);
+    }
+  );
+
+
+/*
+ * ============================
+ * Graceful Shutdown
+ * ============================
+ */
+
+function shutdown(
+  signal
+) {
+
+  console.log(
+    `Received ${signal}`
+  );
+
+  addLog(
+    `收到 ${signal}，正在停止服务`
+  );
+
+  stopScheduler();
+
+  server.close(
+    () => {
+
+      process.exit(0);
+
+    }
+  );
+
+}
+
 
 process.on(
   "SIGTERM",
   () => {
-
-    console.log(
-      "Received SIGTERM"
-    );
-
-    stopScheduler();
-
-    process.exit(0);
-
+    shutdown("SIGTERM");
   }
 );
+
 
 process.on(
   "SIGINT",
   () => {
-
-    console.log(
-      "Received SIGINT"
-    );
-
-    stopScheduler();
-
-    process.exit(0);
-
+    shutdown("SIGINT");
   }
 );
