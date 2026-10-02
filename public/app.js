@@ -1,1261 +1,1587 @@
 const TOKEN_KEY = "remain_token";
 
-let logStreamController = null;
-let refreshTimer = null;
-
-let currentTasks = [];
-
-
-/* =========================================================
-   Token
-   ========================================================= */
-
-function getToken() {
-  return localStorage.getItem(TOKEN_KEY);
-}
-
-function setToken(token) {
-  localStorage.setItem(TOKEN_KEY, token);
-}
-
-function clearToken() {
-  localStorage.removeItem(TOKEN_KEY);
-}
-
-
-/* =========================================================
-   页面显示
-   ========================================================= */
-
-function showLoginPage() {
-  const loginPage = document.getElementById("login-page");
-  const appPage = document.getElementById("app-page");
-
-  if (loginPage) {
-    loginPage.classList.remove("hidden");
-  }
-
-  if (appPage) {
-    appPage.classList.add("hidden");
-  }
-}
-
-function showAppPage() {
-  const loginPage = document.getElementById("login-page");
-  const appPage = document.getElementById("app-page");
-
-  if (loginPage) {
-    loginPage.classList.add("hidden");
-  }
-
-  if (appPage) {
-    appPage.classList.remove("hidden");
-  }
-}
-
-
-/* =========================================================
-   通用 API
-   ========================================================= */
-
-async function apiFetch(url, options = {}) {
-  const token = getToken();
-
-  const headers = new Headers(
-    options.headers || {}
+let token =
+  localStorage.getItem(
+    TOKEN_KEY
   );
 
+
+let logStreamController =
+  null;
+
+let refreshTimer =
+  null;
+
+
+/*
+ * ============================
+ * DOM
+ * ============================
+ */
+
+const loginPage =
+  document.getElementById(
+    "login-page"
+  );
+
+const appPage =
+  document.getElementById(
+    "app-page"
+  );
+
+const loginForm =
+  document.getElementById(
+    "login-form"
+  );
+
+const loginPassword =
+  document.getElementById(
+    "login-password"
+  );
+
+const loginError =
+  document.getElementById(
+    "login-error"
+  );
+
+const logoutButton =
+  document.getElementById(
+    "logout-button"
+  );
+
+const createTaskForm =
+  document.getElementById(
+    "create-task-form"
+  );
+
+const createTaskMessage =
+  document.getElementById(
+    "create-task-message"
+  );
+
+const tasksContainer =
+  document.getElementById(
+    "tasks-container"
+  );
+
+const tasksTitle =
+  document.getElementById(
+    "tasks-title"
+  );
+
+const refreshTasksButton =
+  document.getElementById(
+    "refresh-tasks-button"
+  );
+
+const logsContainer =
+  document.getElementById(
+    "logs-container"
+  );
+
+const clearLogsButton =
+  document.getElementById(
+    "clear-logs-button"
+  );
+
+
+/*
+ * 编辑任务
+ */
+
+const editTaskModal =
+  document.getElementById(
+    "edit-task-modal"
+  );
+
+const editModalBackdrop =
+  document.getElementById(
+    "edit-modal-backdrop"
+  );
+
+const closeEditTaskButton =
+  document.getElementById(
+    "close-edit-task-button"
+  );
+
+const editTaskForm =
+  document.getElementById(
+    "edit-task-form"
+  );
+
+const editTaskId =
+  document.getElementById(
+    "edit-task-id"
+  );
+
+const editTaskName =
+  document.getElementById(
+    "edit-task-name"
+  );
+
+const editTaskUrl =
+  document.getElementById(
+    "edit-task-url"
+  );
+
+const editTaskInterval =
+  document.getElementById(
+    "edit-task-interval"
+  );
+
+const editTaskStay =
+  document.getElementById(
+    "edit-task-stay"
+  );
+
+const editTaskMessage =
+  document.getElementById(
+    "edit-task-message"
+  );
+
+const cancelEditTaskButton =
+  document.getElementById(
+    "cancel-edit-task-button"
+  );
+
+
+/*
+ * ============================
+ * 通用 API 请求
+ * ============================
+ */
+
+async function apiFetch(
+  url,
+  options = {}
+) {
+
+  const requestOptions = {
+    ...options
+  };
+
+
+  const headers =
+    new Headers(
+      requestOptions.headers ||
+      {}
+    );
+
+
+  /*
+   * 所有 API 请求自动带 Token
+   */
+
   if (token) {
+
     headers.set(
       "Authorization",
       `Bearer ${token}`
     );
+
   }
 
-  const response = await fetch(
-    url,
-    {
-      ...options,
-      headers
-    }
-  );
 
-  if (response.status === 401) {
-    clearToken();
+  /*
+   * JSON 请求自动设置 Content-Type
+   */
 
-    if (logStreamController) {
-      try {
-        logStreamController.abort();
-      } catch {}
+  if (
+    requestOptions.body &&
+    typeof requestOptions.body ===
+      "string"
+  ) {
 
-      logStreamController = null;
-    }
+    headers.set(
+      "Content-Type",
+      "application/json"
+    );
 
-    showLoginPage();
+  }
+
+
+  requestOptions.headers =
+    headers;
+
+
+  const response =
+    await fetch(
+      url,
+      requestOptions
+    );
+
+
+  /*
+   * Token 失效
+   */
+
+  if (
+    response.status === 401
+  ) {
+
+    logout();
 
     throw new Error(
       "登录已失效，请重新登录"
     );
+
   }
+
 
   return response;
+
 }
 
 
-/* =========================================================
-   HTML 转义
-   ========================================================= */
+/*
+ * ============================
+ * 显示页面
+ * ============================
+ */
 
-function escapeHtml(value) {
-  return String(value ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
+function showLoginPage() {
+
+  loginPage.classList.remove(
+    "hidden"
+  );
+
+  appPage.classList.add(
+    "hidden"
+  );
+
 }
 
 
-/* =========================================================
-   登录
-   ========================================================= */
+function showAppPage() {
 
-async function handleLogin(event) {
-  event.preventDefault();
+  loginPage.classList.add(
+    "hidden"
+  );
 
-  const passwordInput =
-    document.getElementById(
-      "login-password"
-    );
+  appPage.classList.remove(
+    "hidden"
+  );
 
-  const errorElement =
-    document.getElementById(
-      "login-error"
-    );
+}
 
-  const button =
-    document.querySelector(
-      "#login-form button[type='submit']"
-    );
 
-  const password =
-    passwordInput.value;
+/*
+ * ============================
+ * 登录
+ * ============================
+ */
 
-  errorElement.textContent = "";
+loginForm.addEventListener(
+  "submit",
+  async event => {
 
-  if (!password) {
-    errorElement.textContent =
-      "请输入密码";
-    return;
-  }
+    event.preventDefault();
 
-  if (button) {
-    button.disabled = true;
-    button.textContent = "登录中...";
-  }
 
-  try {
-    const response = await fetch(
-      "/api/login",
-      {
-        method: "POST",
+    loginError.textContent =
+      "";
 
-        headers: {
-          "Content-Type":
-            "application/json"
-        },
 
-        body: JSON.stringify({
-          password
-        })
-      }
-    );
+    const password =
+      loginPassword.value;
 
-    let data = {};
 
     try {
-      data = await response.json();
-    } catch {}
 
-    if (!response.ok) {
-      throw new Error(
-        data.error ||
-        "登录失败"
+      const response =
+        await fetch(
+          "/api/login",
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json"
+            },
+
+            body:
+              JSON.stringify({
+                password
+              })
+          }
+        );
+
+
+      const data =
+        await response.json();
+
+
+      if (
+        !response.ok
+      ) {
+
+        throw new Error(
+          data.error ||
+          "登录失败"
+        );
+
+      }
+
+
+      token =
+        data.token;
+
+
+      localStorage.setItem(
+        TOKEN_KEY,
+        token
       );
+
+
+      loginPassword.value =
+        "";
+
+
+      showAppPage();
+
+
+      await loadTasks();
+
+      await loadLogs();
+
+      startLogStream();
+
+      startAutoRefresh();
+
+    } catch (error) {
+
+      loginError.textContent =
+        error.message ||
+        "登录失败";
+
     }
 
-    if (!data.token) {
-      throw new Error(
-        "服务器没有返回登录凭证"
-      );
-    }
-
-    setToken(data.token);
-
-    passwordInput.value = "";
-
-    showAppPage();
-
-    await initializeApp();
-
-  } catch (error) {
-    errorElement.textContent =
-      error.message ||
-      "登录失败";
-
-  } finally {
-    if (button) {
-      button.disabled = false;
-      button.textContent = "登录";
-    }
   }
-}
+);
 
 
-/* =========================================================
-   退出登录
-   ========================================================= */
+/*
+ * ============================
+ * 退出登录
+ * ============================
+ */
+
+logoutButton.addEventListener(
+  "click",
+  () => {
+
+    logout();
+
+  }
+);
+
 
 function logout() {
-  clearToken();
 
-  if (logStreamController) {
-    try {
-      logStreamController.abort();
-    } catch {}
+  token = null;
 
-    logStreamController = null;
-  }
+  localStorage.removeItem(
+    TOKEN_KEY
+  );
 
-  if (refreshTimer) {
-    clearInterval(refreshTimer);
-    refreshTimer = null;
-  }
+
+  stopLogStream();
+
+  stopAutoRefresh();
+
+  closeEditModal();
+
 
   showLoginPage();
+
+
+  loginPassword.value =
+    "";
+
+  loginError.textContent =
+    "";
+
 }
 
 
-/* =========================================================
-   任务列表
-   ========================================================= */
+/*
+ * ============================
+ * 加载任务
+ * ============================
+ */
 
 async function loadTasks() {
-  try {
-    const response = await apiFetch(
-      "/api/tasks"
-    );
 
-    if (!response.ok) {
-      throw new Error(
-        `加载任务失败：HTTP ${response.status}`
+  try {
+
+    const response =
+      await apiFetch(
+        "/api/tasks"
       );
+
+
+    const tasks =
+      await response.json();
+
+
+    if (
+      !response.ok
+    ) {
+
+      throw new Error(
+        tasks.error ||
+        "获取任务失败"
+      );
+
     }
 
-    const tasks = await response.json();
 
-    currentTasks = Array.isArray(tasks)
-      ? tasks
-      : [];
-
-    renderTasks(currentTasks);
+    renderTasks(
+      tasks
+    );
 
   } catch (error) {
+
+    if (
+      error.message
+        .includes("登录已失效")
+    ) {
+
+      return;
+
+    }
+
+
     console.error(
-      "[App] 加载任务失败:",
+      "[App] 获取任务失败：",
       error
     );
 
-    if (
-      error.message !==
-      "登录已失效，请重新登录"
-    ) {
-      showAppError(
-        error.message ||
-        "加载任务失败"
-      );
-    }
   }
+
 }
 
 
-function renderTasks(tasks) {
-  const container =
-    document.getElementById(
-      "tasks-container"
-    );
+/*
+ * ============================
+ * 格式化时间
+ * ============================
+ */
 
-  const title =
-    document.getElementById(
-      "tasks-title"
-    );
+function formatTime(
+  value
+) {
 
-  if (!container) {
-    return;
+  if (!value) {
+
+    return "暂无";
+
   }
 
-  const count =
-    Array.isArray(tasks)
-      ? tasks.length
-      : 0;
 
-  if (title) {
-    title.textContent =
-      `任务列表（共 ${count} 个任务）`;
+  const date =
+    new Date(value);
+
+
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+
+    return "暂无";
+
   }
 
-  if (!count) {
-    container.innerHTML = `
+
+  return date.toLocaleString();
+
+}
+
+
+/*
+ * ============================
+ * 格式化任务状态
+ * ============================
+ */
+
+function getTaskStatus(
+  task
+) {
+
+  if (
+    Number(task.enabled) === 1
+  ) {
+
+    return `
+      <span class="status-on">
+        运行中
+      </span>
+    `;
+
+  }
+
+
+  return `
+    <span class="status-off">
+      已停止
+    </span>
+  `;
+
+}
+
+
+/*
+ * ============================
+ * HTML 转义
+ * ============================
+ */
+
+function escapeHtml(
+  value
+) {
+
+  return String(
+    value ?? ""
+  )
+    .replace(
+      /&/g,
+      "&amp;"
+    )
+    .replace(
+      /</g,
+      "&lt;"
+    )
+    .replace(
+      />/g,
+      "&gt;"
+    )
+    .replace(
+      /"/g,
+      "&quot;"
+    )
+    .replace(
+      /'/g,
+      "&#039;"
+    );
+
+}
+
+
+/*
+ * ============================
+ * 渲染任务列表
+ * ============================
+ */
+
+function renderTasks(
+  tasks
+) {
+
+  tasksTitle.textContent =
+    `任务列表（共 ${tasks.length} 个任务）`;
+
+
+  if (
+    !tasks.length
+  ) {
+
+    tasksContainer.innerHTML = `
       <div class="empty-state">
         暂无任务
       </div>
     `;
 
     return;
+
   }
 
-  container.innerHTML =
+
+  tasksContainer.innerHTML =
     tasks
-      .map(task => renderTaskCard(task))
-      .join("");
-}
-
-
-function renderTaskCard(task) {
-  const id = Number(task.id);
-
-  const name =
-    task.name &&
-    String(task.name).trim()
-      ? task.name
-      : `任务 #${id}`;
-
-  const url =
-    task.url || "";
-
-  const interval =
-    Number(task.interval_minutes || 0);
-
-  const stay =
-    Number(task.stay_seconds || 0);
-
-  const visitCount =
-    Number(task.visit_count || 0);
-
-  const enabled =
-    Number(task.enabled) === 1;
-
-  const statusText =
-    enabled
-      ? "运行中"
-      : "已停止";
-
-  const statusClass =
-    enabled
-      ? "status-on"
-      : "status-off";
-
-  const lastVisit =
-    formatDateTime(task.last_visit);
-
-  const nextVisit =
-    formatDateTime(task.next_visit);
-
-  const lastStatus =
-    task.last_status || "暂无";
-
-  return `
-    <div
-      class="task-card"
-      data-task-id="${id}"
-    >
-
-      <div class="task-card-main">
-
-        <div class="task-title-row">
-
-          <span class="task-id">
-            #${id}
-          </span>
-
-          <span class="task-name">
-            ${escapeHtml(name)}
-          </span>
-
-        </div>
-
-
-        <div class="task-url">
-          ${escapeHtml(url)}
-        </div>
-
-
-        <div class="task-meta">
-
-          <span>
-            间隔：
-            ${interval} 分钟
-          </span>
-
-          <span>
-            停留：
-            ${stay} 秒
-          </span>
-
-          <span>
-            访问次数：
-            ${visitCount}
-          </span>
-
-          <span
-            class="${statusClass}"
+      .map(
+        task =>
+          `
+          <div
+            class="task-card"
+            data-task-id="${task.id}"
           >
-            ${statusText}
-          </span>
 
-        </div>
+            <div class="task-card-header">
 
+              <div class="task-title-area">
 
-        <div class="task-extra">
+                <div class="task-id">
+                  #${task.id}
+                </div>
 
-          <span>
-            上次访问：
-            ${escapeHtml(lastVisit)}
-          </span>
+                <div class="task-name">
+                  ${escapeHtml(
+                    task.name ||
+                    `任务 #${task.id}`
+                  )}
+                </div>
 
-          <span>
-            下次访问：
-            ${escapeHtml(nextVisit)}
-          </span>
+              </div>
 
-          <span>
-            上次结果：
-            ${escapeHtml(lastStatus)}
-          </span>
+              <div class="task-status">
+                ${getTaskStatus(task)}
+              </div>
 
-        </div>
-
-      </div>
+            </div>
 
 
-      <div class="task-actions">
+            <div class="task-url">
 
-        ${
-          enabled
-            ? `
+              <span class="task-label">
+                网址
+              </span>
+
+              <span class="task-value task-url-value">
+                ${escapeHtml(
+                  task.url
+                )}
+              </span>
+
+            </div>
+
+
+            <div class="task-meta">
+
+              <div class="task-meta-item">
+
+                <span class="task-label">
+                  执行间隔
+                </span>
+
+                <span class="task-value">
+                  ${escapeHtml(
+                    task.interval_minutes
+                  )} 分钟
+                </span>
+
+              </div>
+
+
+              <div class="task-meta-item">
+
+                <span class="task-label">
+                  停留时间
+                </span>
+
+                <span class="task-value">
+                  ${escapeHtml(
+                    task.stay_seconds
+                  )} 秒
+                </span>
+
+              </div>
+
+
+              <div class="task-meta-item">
+
+                <span class="task-label">
+                  访问次数
+                </span>
+
+                <span class="task-value">
+                  ${escapeHtml(
+                    task.visit_count || 0
+                  )}
+                </span>
+
+              </div>
+
+
+              <div class="task-meta-item">
+
+                <span class="task-label">
+                  上次访问
+                </span>
+
+                <span class="task-value">
+                  ${formatTime(
+                    task.last_visit
+                  )}
+                </span>
+
+              </div>
+
+
+              <div class="task-meta-item">
+
+                <span class="task-label">
+                  下次访问
+                </span>
+
+                <span class="task-value">
+                  ${formatTime(
+                    task.next_visit
+                  )}
+                </span>
+
+              </div>
+
+
+              <div class="task-meta-item">
+
+                <span class="task-label">
+                  最后结果
+                </span>
+
+                <span class="task-value">
+                  ${escapeHtml(
+                    task.last_status ||
+                    "暂无"
+                  )}
+                </span>
+
+              </div>
+
+            </div>
+
+
+            <div class="task-actions">
+
+              ${
+                Number(task.enabled) === 1
+                  ? `
+                    <button
+                      type="button"
+                      class="secondary-button task-stop-button"
+                      data-id="${task.id}"
+                    >
+                      停止
+                    </button>
+                  `
+                  : `
+                    <button
+                      type="button"
+                      class="primary-button task-start-button"
+                      data-id="${task.id}"
+                    >
+                      启动
+                    </button>
+                  `
+              }
+
+
               <button
                 type="button"
-                class="secondary-button task-action-button"
-                data-action="stop"
-                data-task-id="${id}"
+                class="secondary-button task-edit-button"
+                data-id="${task.id}"
               >
-                停止
+                编辑
               </button>
-            `
-            : `
+
+
               <button
                 type="button"
-                class="primary-button task-action-button"
-                data-action="start"
-                data-task-id="${id}"
+                class="danger-button task-delete-button"
+                data-id="${task.id}"
               >
-                启动
+                删除
               </button>
-            `
-        }
+
+            </div>
+
+          </div>
+          `
+      )
+      .join("");
 
 
-        <button
-          type="button"
-          class="secondary-button task-action-button"
-          data-action="edit"
-          data-task-id="${id}"
-        >
-          编辑
-        </button>
+  /*
+   * 启动按钮
+   */
 
+  document
+    .querySelectorAll(
+      ".task-start-button"
+    )
+    .forEach(
+      button => {
 
-        <button
-          type="button"
-          class="secondary-button danger-button task-action-button"
-          data-action="delete"
-          data-task-id="${id}"
-        >
-          删除
-        </button>
+        button.addEventListener(
+          "click",
+          () =>
+            startTask(
+              button.dataset.id
+            )
+        );
 
-      </div>
-
-    </div>
-  `;
-}
-
-
-/* =========================================================
-   日期时间
-   ========================================================= */
-
-function formatDateTime(value) {
-  if (!value) {
-    return "暂无";
-  }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return String(value);
-  }
-
-  return date.toLocaleString(
-    "zh-CN",
-    {
-      hour12: false
-    }
-  );
-}
-
-
-/* =========================================================
-   任务操作
-   ========================================================= */
-
-async function handleTaskAction(
-  action,
-  taskId
-) {
-  if (!taskId) {
-    return;
-  }
-
-  if (action === "start") {
-    await startTask(taskId);
-    return;
-  }
-
-  if (action === "stop") {
-    await stopTask(taskId);
-    return;
-  }
-
-  if (action === "edit") {
-    await openEditTask(taskId);
-    return;
-  }
-
-  if (action === "delete") {
-    await deleteTask(taskId);
-  }
-}
-
-
-async function startTask(taskId) {
-  try {
-    const response = await apiFetch(
-      `/api/tasks/${taskId}/start`,
-      {
-        method: "POST"
       }
     );
 
-    const data =
-      await parseJsonResponse(response);
 
-    if (!response.ok) {
-      throw new Error(
-        data.error ||
-        `启动任务失败：HTTP ${response.status}`
-      );
-    }
+  /*
+   * 停止按钮
+   */
 
-    await loadTasks();
+  document
+    .querySelectorAll(
+      ".task-stop-button"
+    )
+    .forEach(
+      button => {
 
-  } catch (error) {
-    console.error(
-      "[App] 启动任务失败:",
-      error
+        button.addEventListener(
+          "click",
+          () =>
+            stopTask(
+              button.dataset.id
+            )
+        );
+
+      }
     );
 
-    if (
-      error.message !==
-      "登录已失效，请重新登录"
-    ) {
-      alert(
+
+  /*
+   * 编辑按钮
+   */
+
+  document
+    .querySelectorAll(
+      ".task-edit-button"
+    )
+    .forEach(
+      button => {
+
+        button.addEventListener(
+          "click",
+          () =>
+            openEditModal(
+              button.dataset.id
+            )
+        );
+
+      }
+    );
+
+
+  /*
+   * 删除按钮
+   */
+
+  document
+    .querySelectorAll(
+      ".task-delete-button"
+    )
+    .forEach(
+      button => {
+
+        button.addEventListener(
+          "click",
+          () =>
+            deleteTask(
+              button.dataset.id
+            )
+        );
+
+      }
+    );
+
+}
+
+
+/*
+ * ============================
+ * 创建任务
+ * ============================
+ */
+
+createTaskForm.addEventListener(
+  "submit",
+  async event => {
+
+    event.preventDefault();
+
+
+    createTaskMessage.textContent =
+      "";
+
+
+    const name =
+      document
+        .getElementById(
+          "task-name"
+        )
+        .value
+        .trim();
+
+
+    const url =
+      document
+        .getElementById(
+          "task-url"
+        )
+        .value
+        .trim();
+
+
+    const intervalMinutes =
+      Number(
+        document
+          .getElementById(
+            "task-interval"
+          )
+          .value
+      );
+
+
+    const staySeconds =
+      Number(
+        document
+          .getElementById(
+            "task-stay"
+          )
+          .value
+      );
+
+
+    try {
+
+      const response =
+        await apiFetch(
+          "/api/tasks",
+          {
+            method: "POST",
+
+            body:
+              JSON.stringify({
+                name,
+                url,
+                interval_minutes:
+                  intervalMinutes,
+                stay_seconds:
+                  staySeconds
+              })
+          }
+        );
+
+
+      const data =
+        await response.json();
+
+
+      if (
+        !response.ok
+      ) {
+
+        throw new Error(
+          data.error ||
+          "创建任务失败"
+        );
+
+      }
+
+
+      createTaskForm.reset();
+
+
+      document
+        .getElementById(
+          "task-interval"
+        )
+        .value = 5;
+
+
+      document
+        .getElementById(
+          "task-stay"
+        )
+        .value = 10;
+
+
+      createTaskMessage.textContent =
+        "任务创建成功";
+
+
+      await loadTasks();
+
+    } catch (error) {
+
+      createTaskMessage.textContent =
         error.message ||
+        "创建任务失败";
+
+    }
+
+  }
+);
+
+
+/*
+ * ============================
+ * 启动任务
+ * ============================
+ */
+
+async function startTask(
+  id
+) {
+
+  try {
+
+    const response =
+      await apiFetch(
+        `/api/tasks/${id}/start`,
+        {
+          method: "POST"
+        }
+      );
+
+
+    const data =
+      await response.json();
+
+
+    if (
+      !response.ok
+    ) {
+
+      throw new Error(
+        data.error ||
         "启动任务失败"
       );
+
     }
-  }
-}
 
-
-async function stopTask(taskId) {
-  try {
-    const response = await apiFetch(
-      `/api/tasks/${taskId}/stop`,
-      {
-        method: "POST"
-      }
-    );
-
-    const data =
-      await parseJsonResponse(response);
-
-    if (!response.ok) {
-      throw new Error(
-        data.error ||
-        `停止任务失败：HTTP ${response.status}`
-      );
-    }
 
     await loadTasks();
 
   } catch (error) {
-    console.error(
-      "[App] 停止任务失败:",
-      error
+
+    alert(
+      error.message ||
+      "启动任务失败"
     );
 
-    if (
-      error.message !==
-      "登录已失效，请重新登录"
-    ) {
-      alert(
-        error.message ||
-        "停止任务失败"
-      );
-    }
   }
+
 }
 
 
-async function deleteTask(taskId) {
-  const task =
-    currentTasks.find(
-      item =>
-        Number(item.id) ===
-        Number(taskId)
+/*
+ * ============================
+ * 停止任务
+ * ============================
+ */
+
+async function stopTask(
+  id
+) {
+
+  try {
+
+    const response =
+      await apiFetch(
+        `/api/tasks/${id}/stop`,
+        {
+          method: "POST"
+        }
+      );
+
+
+    const data =
+      await response.json();
+
+
+    if (
+      !response.ok
+    ) {
+
+      throw new Error(
+        data.error ||
+        "停止任务失败"
+      );
+
+    }
+
+
+    await loadTasks();
+
+  } catch (error) {
+
+    alert(
+      error.message ||
+      "停止任务失败"
     );
 
-  const taskName =
-    task &&
-    task.name &&
-    String(task.name).trim()
-      ? task.name
-      : `任务 #${taskId}`;
+  }
+
+}
+
+
+/*
+ * ============================
+ * 删除任务
+ * ============================
+ */
+
+async function deleteTask(
+  id
+) {
 
   const confirmed =
     window.confirm(
-      `确定要删除「${taskName}」吗？\n\n删除后任务 #${taskId} 将永久删除。`
+      `确定要删除任务 #${id} 吗？`
     );
+
 
   if (!confirmed) {
+
     return;
+
   }
+
 
   try {
-    const response = await apiFetch(
-      `/api/tasks/${taskId}`,
-      {
-        method: "DELETE"
-      }
-    );
 
-    const data =
-      await parseJsonResponse(response);
-
-    if (!response.ok) {
-      throw new Error(
-        data.error ||
-        `删除任务失败：HTTP ${response.status}`
-      );
-    }
-
-    await loadTasks();
-
-  } catch (error) {
-    console.error(
-      "[App] 删除任务失败:",
-      error
-    );
-
-    if (
-      error.message !==
-      "登录已失效，请重新登录"
-    ) {
-      alert(
-        error.message ||
-        "删除任务失败"
-      );
-    }
-  }
-}
-
-
-/* =========================================================
-   创建任务
-   ========================================================= */
-
-async function handleCreateTask(event) {
-  event.preventDefault();
-
-  const nameInput =
-    document.getElementById(
-      "task-name"
-    );
-
-  const urlInput =
-    document.getElementById(
-      "task-url"
-    );
-
-  const intervalInput =
-    document.getElementById(
-      "task-interval"
-    );
-
-  const stayInput =
-    document.getElementById(
-      "task-stay"
-    );
-
-  const name =
-    nameInput.value.trim();
-
-  const url =
-    urlInput.value.trim();
-
-  const interval =
-    Number(intervalInput.value);
-
-  const stay =
-    Number(stayInput.value);
-
-  if (!name) {
-    alert("请输入任务名称");
-    nameInput.focus();
-    return;
-  }
-
-  if (!url) {
-    alert("请输入访问 URL");
-    urlInput.focus();
-    return;
-  }
-
-  if (
-    !Number.isFinite(interval) ||
-    interval <= 0
-  ) {
-    alert("执行间隔必须大于 0");
-    intervalInput.focus();
-    return;
-  }
-
-  if (
-    !Number.isFinite(stay) ||
-    stay < 0
-  ) {
-    alert("页面停留时间不能小于 0");
-    stayInput.focus();
-    return;
-  }
-
-  const submitButton =
-    event.target.querySelector(
-      "button[type='submit']"
-    );
-
-  if (submitButton) {
-    submitButton.disabled = true;
-    submitButton.textContent =
-      "创建中...";
-  }
-
-  try {
-    const response = await apiFetch(
-      "/api/tasks",
-      {
-        method: "POST",
-
-        headers: {
-          "Content-Type":
-            "application/json"
-        },
-
-        body: JSON.stringify({
-          name,
-          url,
-          interval_minutes: interval,
-          stay_seconds: stay
-        })
-      }
-    );
-
-    const data =
-      await parseJsonResponse(response);
-
-    if (!response.ok) {
-      throw new Error(
-        data.error ||
-        `创建任务失败：HTTP ${response.status}`
-      );
-    }
-
-    event.target.reset();
-
-    /*
-     * 保持创建任务时的默认参数。
-     */
-    intervalInput.value = 5;
-    stayInput.value = 10;
-
-    await loadTasks();
-
-  } catch (error) {
-    console.error(
-      "[App] 创建任务失败:",
-      error
-    );
-
-    if (
-      error.message !==
-      "登录已失效，请重新登录"
-    ) {
-      alert(
-        error.message ||
-        "创建任务失败"
-      );
-    }
-
-  } finally {
-    if (submitButton) {
-      submitButton.disabled = false;
-      submitButton.textContent =
-        "创建任务";
-    }
-  }
-}
-
-
-/* =========================================================
-   编辑任务
-   ========================================================= */
-
-async function openEditTask(taskId) {
-  let task =
-    currentTasks.find(
-      item =>
-        Number(item.id) ===
-        Number(taskId)
-    );
-
-  try {
-    /*
-     * 如果当前缓存里没有，
-     * 再从服务器获取一次。
-     */
-    if (!task) {
-      const response =
-        await apiFetch(
-          `/api/tasks/${taskId}`
-        );
-
-      const data =
-        await parseJsonResponse(response);
-
-      if (!response.ok) {
-        throw new Error(
-          data.error ||
-          `获取任务失败：HTTP ${response.status}`
-        );
-      }
-
-      task = data;
-    }
-
-    if (!task) {
-      throw new Error(
-        "任务不存在"
-      );
-    }
-
-    const idInput =
-      document.getElementById(
-        "edit-task-id"
-      );
-
-    const nameInput =
-      document.getElementById(
-        "edit-task-name"
-      );
-
-    const urlInput =
-      document.getElementById(
-        "edit-task-url"
-      );
-
-    const intervalInput =
-      document.getElementById(
-        "edit-task-interval"
-      );
-
-    const stayInput =
-      document.getElementById(
-        "edit-task-stay"
-      );
-
-    idInput.value = task.id;
-
-    nameInput.value =
-      task.name || "";
-
-    urlInput.value =
-      task.url || "";
-
-    intervalInput.value =
-      task.interval_minutes ?? 5;
-
-    stayInput.value =
-      task.stay_seconds ?? 10;
-
-    showEditModal();
-
-    setTimeout(() => {
-      nameInput.focus();
-      nameInput.select();
-    }, 50);
-
-  } catch (error) {
-    console.error(
-      "[App] 打开编辑任务失败:",
-      error
-    );
-
-    if (
-      error.message !==
-      "登录已失效，请重新登录"
-    ) {
-      alert(
-        error.message ||
-        "打开编辑任务失败"
-      );
-    }
-  }
-}
-
-
-function showEditModal() {
-  const modal =
-    document.getElementById(
-      "edit-task-modal"
-    );
-
-  if (!modal) {
-    return;
-  }
-
-  modal.classList.remove("hidden");
-
-  document.body.classList.add(
-    "modal-open"
-  );
-}
-
-
-function closeEditModal() {
-  const modal =
-    document.getElementById(
-      "edit-task-modal"
-    );
-
-  if (!modal) {
-    return;
-  }
-
-  modal.classList.add("hidden");
-
-  document.body.classList.remove(
-    "modal-open"
-  );
-}
-
-
-async function handleEditTask(event) {
-  event.preventDefault();
-
-  const id =
-    document.getElementById(
-      "edit-task-id"
-    ).value;
-
-  const nameInput =
-    document.getElementById(
-      "edit-task-name"
-    );
-
-  const urlInput =
-    document.getElementById(
-      "edit-task-url"
-    );
-
-  const intervalInput =
-    document.getElementById(
-      "edit-task-interval"
-    );
-
-  const stayInput =
-    document.getElementById(
-      "edit-task-stay"
-    );
-
-  const name =
-    nameInput.value.trim();
-
-  const url =
-    urlInput.value.trim();
-
-  const interval =
-    Number(intervalInput.value);
-
-  const stay =
-    Number(stayInput.value);
-
-  if (!id) {
-    alert("任务 ID 无效");
-    return;
-  }
-
-  if (!name) {
-    alert("请输入任务名称");
-    nameInput.focus();
-    return;
-  }
-
-  if (!url) {
-    alert("请输入访问 URL");
-    urlInput.focus();
-    return;
-  }
-
-  if (
-    !Number.isFinite(interval) ||
-    interval <= 0
-  ) {
-    alert("执行间隔必须大于 0");
-    intervalInput.focus();
-    return;
-  }
-
-  if (
-    !Number.isFinite(stay) ||
-    stay < 0
-  ) {
-    alert("页面停留时间不能小于 0");
-    stayInput.focus();
-    return;
-  }
-
-  const submitButton =
-    event.target.querySelector(
-      "button[type='submit']"
-    );
-
-  if (submitButton) {
-    submitButton.disabled = true;
-    submitButton.textContent =
-      "保存中...";
-  }
-
-  try {
     const response =
       await apiFetch(
         `/api/tasks/${id}`,
         {
-          method: "PUT",
-
-          headers: {
-            "Content-Type":
-              "application/json"
-          },
-
-          body: JSON.stringify({
-            name,
-            url,
-            interval_minutes: interval,
-            stay_seconds: stay
-          })
+          method: "DELETE"
         }
       );
 
-    const data =
-      await parseJsonResponse(response);
 
-    if (!response.ok) {
+    const data =
+      await response.json();
+
+
+    if (
+      !response.ok
+    ) {
+
       throw new Error(
         data.error ||
-        `保存任务失败：HTTP ${response.status}`
+        "删除任务失败"
       );
+
     }
 
-    closeEditModal();
 
     await loadTasks();
 
   } catch (error) {
-    console.error(
-      "[App] 保存任务失败:",
-      error
+
+    alert(
+      error.message ||
+      "删除任务失败"
     );
 
-    if (
-      error.message !==
-      "登录已失效，请重新登录"
-    ) {
-      alert(
-        error.message ||
-        "保存任务失败"
-      );
-    }
-
-  } finally {
-    if (submitButton) {
-      submitButton.disabled = false;
-      submitButton.textContent =
-        "保存修改";
-    }
   }
+
 }
 
 
-/* =========================================================
-   日志
-   ========================================================= */
+/*
+ * ============================
+ * 打开编辑弹窗
+ * ============================
+ */
+
+async function openEditModal(
+  id
+) {
+
+  editTaskMessage.textContent =
+    "";
+
+
+  try {
+
+    const response =
+      await apiFetch(
+        `/api/tasks/${id}`
+      );
+
+
+    const task =
+      await response.json();
+
+
+    if (
+      !response.ok
+    ) {
+
+      throw new Error(
+        task.error ||
+        "获取任务失败"
+      );
+
+    }
+
+
+    editTaskId.value =
+      task.id;
+
+
+    editTaskName.value =
+      task.name || "";
+
+
+    editTaskUrl.value =
+      task.url || "";
+
+
+    editTaskInterval.value =
+      task.interval_minutes;
+
+
+    editTaskStay.value =
+      task.stay_seconds;
+
+
+    editTaskModal.classList.remove(
+      "hidden"
+    );
+
+
+    setTimeout(
+      () => {
+
+        editTaskName.focus();
+
+      },
+      50
+    );
+
+  } catch (error) {
+
+    alert(
+      error.message ||
+      "获取任务失败"
+    );
+
+  }
+
+}
+
+
+/*
+ * ============================
+ * 关闭编辑弹窗
+ * ============================
+ */
+
+function closeEditModal() {
+
+  editTaskModal.classList.add(
+    "hidden"
+  );
+
+
+  editTaskMessage.textContent =
+    "";
+
+}
+
+
+/*
+ * 关闭按钮
+ */
+
+closeEditTaskButton.addEventListener(
+  "click",
+  closeEditModal
+);
+
+
+/*
+ * 取消按钮
+ */
+
+cancelEditTaskButton.addEventListener(
+  "click",
+  closeEditModal
+);
+
+
+/*
+ * 点击背景关闭
+ */
+
+editModalBackdrop.addEventListener(
+  "click",
+  closeEditModal
+);
+
+
+/*
+ * ESC 关闭
+ */
+
+document.addEventListener(
+  "keydown",
+  event => {
+
+    if (
+      event.key === "Escape" &&
+      !editTaskModal.classList.contains(
+        "hidden"
+      )
+    ) {
+
+      closeEditModal();
+
+    }
+
+  }
+);
+
+
+/*
+ * ============================
+ * 保存编辑
+ * ============================
+ */
+
+editTaskForm.addEventListener(
+  "submit",
+  async event => {
+
+    event.preventDefault();
+
+
+    editTaskMessage.textContent =
+      "";
+
+
+    const id =
+      editTaskId.value;
+
+
+    const name =
+      editTaskName.value.trim();
+
+
+    const url =
+      editTaskUrl.value.trim();
+
+
+    const intervalMinutes =
+      Number(
+        editTaskInterval.value
+      );
+
+
+    const staySeconds =
+      Number(
+        editTaskStay.value
+      );
+
+
+    try {
+
+      const response =
+        await apiFetch(
+          `/api/tasks/${id}`,
+          {
+            method: "PUT",
+
+            body:
+              JSON.stringify({
+                name,
+                url,
+                interval_minutes:
+                  intervalMinutes,
+                stay_seconds:
+                  staySeconds
+              })
+          }
+        );
+
+
+      const data =
+        await response.json();
+
+
+      if (
+        !response.ok
+      ) {
+
+        throw new Error(
+          data.error ||
+          "保存修改失败"
+        );
+
+      }
+
+
+      closeEditModal();
+
+
+      await loadTasks();
+
+    } catch (error) {
+
+      editTaskMessage.textContent =
+        error.message ||
+        "保存修改失败";
+
+    }
+
+  }
+);
+
+
+/*
+ * ============================
+ * 加载日志
+ * ============================
+ */
 
 async function loadLogs() {
+
   try {
+
     const response =
       await apiFetch(
         "/api/logs"
       );
 
-    if (!response.ok) {
-      throw new Error(
-        `加载日志失败：HTTP ${response.status}`
-      );
-    }
 
     const logs =
       await response.json();
 
-    renderLogs(logs);
+
+    if (
+      !response.ok
+    ) {
+
+      throw new Error(
+        logs.error ||
+        "获取日志失败"
+      );
+
+    }
+
+
+    renderLogs(
+      logs
+    );
 
   } catch (error) {
+
+    if (
+      error.message
+        .includes("登录已失效")
+    ) {
+
+      return;
+
+    }
+
+
     console.error(
-      "[App] 加载日志失败:",
+      "[App] 获取日志失败：",
       error
     );
 
-    if (
-      error.message !==
-      "登录已失效，请重新登录"
-    ) {
-      showAppError(
-        error.message ||
-        "加载日志失败"
-      );
-    }
   }
+
 }
 
 
-function renderLogs(logs) {
-  const container =
-    document.getElementById(
-      "logs-container"
-    );
+/*
+ * ============================
+ * 渲染日志
+ * ============================
+ */
 
-  if (!container) {
-    return;
-  }
+function renderLogs(
+  logs
+) {
 
   if (
-    !Array.isArray(logs) ||
-    logs.length === 0
+    !logs ||
+    !logs.length
   ) {
-    container.innerHTML = `
+
+    logsContainer.innerHTML = `
       <div class="empty-state">
         暂无日志
       </div>
     `;
 
     return;
+
   }
 
-  container.innerHTML =
+
+  logsContainer.innerHTML =
     logs
-      .map(log => renderLogItem(log))
+      .map(
+        log =>
+          `
+          <div class="log-entry ${
+            log.level === "error"
+              ? "log-error"
+              : ""
+          }">
+
+            <span class="log-time">
+              ${escapeHtml(
+                formatTime(
+                  log.time
+                )
+              )}
+            </span>
+
+            <span class="log-message">
+              ${escapeHtml(
+                log.message
+              )}
+            </span>
+
+          </div>
+          `
+      )
       .join("");
 
-  container.scrollTop =
-    container.scrollHeight;
+
+  /*
+   * 自动滚动到底部
+   */
+
+  logsContainer.scrollTop =
+    logsContainer.scrollHeight;
+
 }
 
 
-function renderLogItem(log) {
-  const level =
-    log.level || "info";
+/*
+ * ============================
+ * SSE 实时日志
+ * ============================
+ */
 
-  const message =
-    log.message || "";
+async function startLogStream() {
 
-  const time =
-    formatDateTime(
-      log.created_at ||
-      log.time ||
-      log.timestamp
-    );
-
-  return `
-    <div class="log-item log-${escapeHtml(level)}">
-
-      <span class="log-time">
-        ${escapeHtml(time)}
-      </span>
-
-      <span class="log-level">
-        ${escapeHtml(level)}
-      </span>
-
-      <span class="log-message">
-        ${escapeHtml(message)}
-      </span>
-
-    </div>
-  `;
-}
+  stopLogStream();
 
 
-/* =========================================================
-   实时日志
-   ========================================================= */
+  if (!token) {
 
-async function connectLogStream() {
-  if (!getToken()) {
     return;
+
   }
 
-  if (logStreamController) {
-    try {
-      logStreamController.abort();
-    } catch {}
-  }
 
-  const controller =
+  logStreamController =
     new AbortController();
 
-  logStreamController = controller;
+
+  const signal =
+    logStreamController.signal;
+
 
   try {
+
     const response =
       await fetch(
         "/api/logs/stream",
@@ -1263,522 +1589,617 @@ async function connectLogStream() {
           method: "GET",
 
           headers: {
-            Authorization:
-              `Bearer ${getToken()}`
+            "Authorization":
+              `Bearer ${token}`,
+
+            "Accept":
+              "text/event-stream"
           },
 
-          signal:
-            controller.signal
+          signal
         }
       );
 
-    if (response.status === 401) {
-      clearToken();
-      showLoginPage();
+
+    if (
+      response.status === 401
+    ) {
+
+      logout();
+
       return;
+
     }
 
-    if (!response.ok) {
+
+    if (
+      !response.ok
+    ) {
+
       throw new Error(
-        `日志连接失败：HTTP ${response.status}`
+        `日志连接失败：${response.status}`
       );
+
     }
 
-    if (!response.body) {
+
+    if (
+      !response.body
+    ) {
+
       throw new Error(
-        "浏览器不支持实时日志流"
+        "浏览器不支持日志流"
       );
+
     }
+
 
     const reader =
       response.body.getReader();
 
+
     const decoder =
       new TextDecoder();
 
+
     let buffer = "";
 
-    while (!controller.signal.aborted) {
-      const result =
+
+    while (
+      !signal.aborted
+    ) {
+
+      const {
+        value,
+        done
+      } =
         await reader.read();
 
-      if (result.done) {
+
+      if (done) {
+
         break;
+
       }
+
 
       buffer +=
         decoder.decode(
-          result.value,
+          value,
           {
             stream: true
           }
         );
 
-      const parts =
-        buffer.split("\n");
+
+      const events =
+        buffer.split(
+          "\n\n"
+        );
+
 
       buffer =
-        parts.pop() || "";
+        events.pop() || "";
 
-      for (const line of parts) {
-        processLogStreamLine(line);
+
+      for (
+        const event of events
+      ) {
+
+        processLogEvent(
+          event
+        );
+
       }
+
     }
 
   } catch (error) {
+
     if (
-      controller.signal.aborted
+      signal.aborted
     ) {
+
       return;
+
     }
 
+
     console.error(
-      "[App] 实时日志连接失败:",
+      "[App] 日志连接断开：",
       error
     );
 
-  } finally {
-    if (
-      logStreamController ===
-      controller
-    ) {
-      logStreamController = null;
-    }
-
-    /*
-     * 连接断开后自动重连。
-     */
-    if (
-      getToken() &&
-      !controller.signal.aborted
-    ) {
-      setTimeout(() => {
-        if (getToken()) {
-          connectLogStream();
-        }
-      }, 3000);
-    }
-  }
-}
-
-
-function processLogStreamLine(line) {
-  const trimmed =
-    line.trim();
-
-  if (!trimmed) {
-    return;
   }
 
-  if (
-    !trimmed.startsWith("data:")
-  ) {
-    return;
-  }
-
-  const raw =
-    trimmed.slice(5).trim();
-
-  if (!raw) {
-    return;
-  }
-
-  try {
-    const log =
-      JSON.parse(raw);
-
-    appendLog(log);
-
-  } catch (error) {
-    console.error(
-      "[App] 日志数据解析失败:",
-      error
-    );
-  }
-}
-
-
-function appendLog(log) {
-  const container =
-    document.getElementById(
-      "logs-container"
-    );
-
-  if (!container) {
-    return;
-  }
 
   /*
-   * 如果当前显示的是“暂无日志”，
-   * 先清掉空状态。
+   * 自动重连
    */
-  const emptyState =
-    container.querySelector(
+
+  if (
+    token &&
+    !signal.aborted
+  ) {
+
+    setTimeout(
+      () => {
+
+        if (token) {
+
+          startLogStream();
+
+        }
+
+      },
+      3000
+    );
+
+  }
+
+}
+
+
+/*
+ * ============================
+ * 处理 SSE 事件
+ * ============================
+ */
+
+function processLogEvent(
+  event
+) {
+
+  const lines =
+    event.split(
+      "\n"
+    );
+
+
+  let data = "";
+
+
+  for (
+    const line of lines
+  ) {
+
+    if (
+      line.startsWith(
+        "data:"
+      )
+    ) {
+
+      data +=
+        line
+          .slice(5)
+          .trim();
+
+    }
+
+  }
+
+
+  if (!data) {
+
+    return;
+
+  }
+
+
+  try {
+
+    const payload =
+      JSON.parse(data);
+
+
+    /*
+     * 历史日志
+     */
+
+    if (
+      payload.type ===
+      "history"
+    ) {
+
+      renderLogs(
+        payload.logs || []
+      );
+
+      return;
+
+    }
+
+
+    /*
+     * 新日志
+     */
+
+    if (
+      payload.message
+    ) {
+
+      appendLog(
+        payload
+      );
+
+    }
+
+  } catch (error) {
+
+    console.error(
+      "[App] 日志解析失败：",
+      error
+    );
+
+  }
+
+}
+
+
+/*
+ * ============================
+ * 添加单条日志
+ * ============================
+ */
+
+function appendLog(
+  log
+) {
+
+  /*
+   * 如果当前是空状态，
+   * 先清除。
+   */
+
+  const empty =
+    logsContainer.querySelector(
       ".empty-state"
     );
 
-  if (emptyState) {
-    emptyState.remove();
+
+  if (empty) {
+
+    empty.remove();
+
   }
 
-  container.insertAdjacentHTML(
-    "beforeend",
-    renderLogItem(log)
-  );
 
-  /*
-   * 限制前端日志节点数量，
-   * 避免长时间运行导致页面越来越大。
-   */
-  const items =
-    container.querySelectorAll(
-      ".log-item"
+  const entry =
+    document.createElement(
+      "div"
     );
 
-  const maxItems = 500;
 
-  if (items.length > maxItems) {
-    const removeCount =
-      items.length - maxItems;
+  entry.className =
+    "log-entry";
 
-    for (
-      let i = 0;
-      i < removeCount;
-      i++
-    ) {
-      items[i].remove();
-    }
+
+  if (
+    log.level ===
+    "error"
+  ) {
+
+    entry.classList.add(
+      "log-error"
+    );
+
   }
 
-  container.scrollTop =
-    container.scrollHeight;
+
+  const time =
+    document.createElement(
+      "span"
+    );
+
+
+  time.className =
+    "log-time";
+
+
+  time.textContent =
+    formatTime(
+      log.time
+    );
+
+
+  const message =
+    document.createElement(
+      "span"
+    );
+
+
+  message.className =
+    "log-message";
+
+
+  message.textContent =
+    log.message;
+
+
+  entry.appendChild(
+    time
+  );
+
+
+  entry.appendChild(
+    message
+  );
+
+
+  logsContainer.appendChild(
+    entry
+  );
+
+
+  /*
+   * 最多显示 200 条。
+   */
+
+  while (
+    logsContainer
+      .querySelectorAll(
+        ".log-entry"
+      )
+      .length > 200
+  ) {
+
+    const first =
+      logsContainer
+        .querySelector(
+          ".log-entry"
+        );
+
+
+    if (!first) {
+
+      break;
+
+    }
+
+
+    first.remove();
+
+  }
+
+
+  logsContainer.scrollTop =
+    logsContainer.scrollHeight;
+
 }
 
 
-/* =========================================================
-   清空日志
-   ========================================================= */
+/*
+ * ============================
+ * 停止日志流
+ * ============================
+ */
 
-async function clearLogs() {
-  const confirmed =
-    window.confirm(
-      "确定要清空全部运行日志吗？"
-    );
+function stopLogStream() {
 
-  if (!confirmed) {
-    return;
+  if (
+    logStreamController
+  ) {
+
+    try {
+
+      logStreamController.abort();
+
+    } catch {}
+
+    logStreamController =
+      null;
+
   }
 
-  try {
-    const response =
-      await apiFetch(
-        "/api/logs",
-        {
-          method: "DELETE"
-        }
+}
+
+
+/*
+ * ============================
+ * 清空日志
+ * ============================
+ */
+
+clearLogsButton.addEventListener(
+  "click",
+  async () => {
+
+    const confirmed =
+      window.confirm(
+        "确定要清空当前日志吗？"
       );
 
-    const data =
-      await parseJsonResponse(response);
 
-    if (!response.ok) {
-      throw new Error(
-        data.error ||
-        `清空日志失败：HTTP ${response.status}`
-      );
+    if (!confirmed) {
+
+      return;
+
     }
 
-    await loadLogs();
 
-  } catch (error) {
-    console.error(
-      "[App] 清空日志失败:",
-      error
-    );
+    /*
+     * 当前后端 logger.js
+     * 没有提供真正的 clearLogs()
+     *
+     * 所以这里刷新日志。
+     *
+     * 保持与现有后端兼容。
+     */
 
-    if (
-      error.message !==
-      "登录已失效，请重新登录"
-    ) {
+    try {
+
+      const response =
+        await apiFetch(
+          "/api/logs",
+          {
+            method: "DELETE"
+          }
+        );
+
+
+      if (
+        !response.ok
+      ) {
+
+        throw new Error(
+          "清空日志失败"
+        );
+
+      }
+
+
+      await loadLogs();
+
+    } catch (error) {
+
       alert(
         error.message ||
         "清空日志失败"
       );
+
     }
-  }
-}
 
-
-/* =========================================================
-   JSON 响应
-   ========================================================= */
-
-async function parseJsonResponse(
-  response
-) {
-  try {
-    return await response.json();
-  } catch {
-    return {};
-  }
-}
-
-
-/* =========================================================
-   错误提示
-   ========================================================= */
-
-function showAppError(message) {
-  console.error(
-    "[App]",
-    message
-  );
-}
-
-
-/* =========================================================
-   初始化
-   ========================================================= */
-
-async function initializeApp() {
-  showAppPage();
-
-  await Promise.all([
-    loadTasks(),
-    loadLogs()
-  ]);
-
-  connectLogStream();
-
-  if (refreshTimer) {
-    clearInterval(refreshTimer);
-  }
-
-  /*
-   * 保留原来的自动刷新机制。
-   */
-  refreshTimer =
-    setInterval(() => {
-      if (getToken()) {
-        loadTasks();
-        loadLogs();
-      }
-    }, 5000);
-}
-
-
-/* =========================================================
-   事件绑定
-   ========================================================= */
-
-function bindEvents() {
-  const loginForm =
-    document.getElementById(
-      "login-form"
-    );
-
-  if (loginForm) {
-    loginForm.addEventListener(
-      "submit",
-      handleLogin
-    );
-  }
-
-
-  const logoutButton =
-    document.getElementById(
-      "logout-button"
-    );
-
-  if (logoutButton) {
-    logoutButton.addEventListener(
-      "click",
-      logout
-    );
-  }
-
-
-  const taskForm =
-    document.getElementById(
-      "task-form"
-    );
-
-  if (taskForm) {
-    taskForm.addEventListener(
-      "submit",
-      handleCreateTask
-    );
-  }
-
-
-  const refreshTasksButton =
-    document.getElementById(
-      "refresh-tasks-button"
-    );
-
-  if (refreshTasksButton) {
-    refreshTasksButton.addEventListener(
-      "click",
-      loadTasks
-    );
-  }
-
-
-  const clearLogsButton =
-    document.getElementById(
-      "clear-logs-button"
-    );
-
-  if (clearLogsButton) {
-    clearLogsButton.addEventListener(
-      "click",
-      clearLogs
-    );
-  }
-
-
-  /*
-   * 任务按钮使用事件委托。
-   */
-  const tasksContainer =
-    document.getElementById(
-      "tasks-container"
-    );
-
-  if (tasksContainer) {
-    tasksContainer.addEventListener(
-      "click",
-      event => {
-        const button =
-          event.target.closest(
-            "[data-action]"
-          );
-
-        if (!button) {
-          return;
-        }
-
-        const action =
-          button.dataset.action;
-
-        const taskId =
-          button.dataset.taskId;
-
-        handleTaskAction(
-          action,
-          taskId
-        );
-      }
-    );
-  }
-
-
-  /*
-   * 编辑任务
-   */
-  const editTaskForm =
-    document.getElementById(
-      "edit-task-form"
-    );
-
-  if (editTaskForm) {
-    editTaskForm.addEventListener(
-      "submit",
-      handleEditTask
-    );
-  }
-
-
-  const closeEditButton =
-    document.getElementById(
-      "close-edit-task-button"
-    );
-
-  if (closeEditButton) {
-    closeEditButton.addEventListener(
-      "click",
-      closeEditModal
-    );
-  }
-
-
-  const cancelEditButton =
-    document.getElementById(
-      "cancel-edit-task-button"
-    );
-
-  if (cancelEditButton) {
-    cancelEditButton.addEventListener(
-      "click",
-      closeEditModal
-    );
-  }
-
-
-  const editBackdrop =
-    document.getElementById(
-      "edit-modal-backdrop"
-    );
-
-  if (editBackdrop) {
-    editBackdrop.addEventListener(
-      "click",
-      closeEditModal
-    );
-  }
-
-
-  /*
-   * ESC 关闭编辑窗口
-   */
-  document.addEventListener(
-    "keydown",
-    event => {
-      if (
-        event.key === "Escape"
-      ) {
-        const modal =
-          document.getElementById(
-            "edit-task-modal"
-          );
-
-        if (
-          modal &&
-          !modal.classList.contains(
-            "hidden"
-          )
-        ) {
-          closeEditModal();
-        }
-      }
-    }
-  );
-}
-
-
-/* =========================================================
-   启动
-   ========================================================= */
-
-document.addEventListener(
-  "DOMContentLoaded",
-  async () => {
-    bindEvents();
-
-    if (getToken()) {
-      try {
-        await initializeApp();
-      } catch (error) {
-        console.error(
-          "[App] 初始化失败:",
-          error
-        );
-
-        clearToken();
-        showLoginPage();
-      }
-    } else {
-      showLoginPage();
-    }
   }
 );
+
+
+/*
+ * ============================
+ * 刷新任务
+ * ============================
+ */
+
+refreshTasksButton.addEventListener(
+  "click",
+  () => {
+
+    loadTasks();
+
+  }
+);
+
+
+/*
+ * ============================
+ * 自动刷新
+ * ============================
+ */
+
+function startAutoRefresh() {
+
+  stopAutoRefresh();
+
+
+  refreshTimer =
+    setInterval(
+      () => {
+
+        if (!token) {
+
+          return;
+
+        }
+
+
+        loadTasks();
+
+      },
+      5000
+    );
+
+}
+
+
+function stopAutoRefresh() {
+
+  if (
+    refreshTimer
+  ) {
+
+    clearInterval(
+      refreshTimer
+    );
+
+    refreshTimer =
+      null;
+
+  }
+
+}
+
+
+/*
+ * ============================
+ * 页面初始化
+ * ============================
+ */
+
+async function initialize() {
+
+  if (!token) {
+
+    showLoginPage();
+
+    return;
+
+  }
+
+
+  try {
+
+    /*
+     * 通过任务接口验证 Token
+     */
+
+    const response =
+      await apiFetch(
+        "/api/tasks"
+      );
+
+
+    if (
+      !response.ok
+    ) {
+
+      throw new Error(
+        "登录已失效"
+      );
+
+    }
+
+
+    const tasks =
+      await response.json();
+
+
+    showAppPage();
+
+
+    renderTasks(
+      tasks
+    );
+
+
+    await loadLogs();
+
+
+    startLogStream();
+
+    startAutoRefresh();
+
+  } catch (error) {
+
+    logout();
+
+  }
+
+}
+
+
+/*
+ * ============================
+ * 启动
+ * ============================
+ */
+
+initialize();
