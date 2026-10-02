@@ -1,6 +1,5 @@
 services:
-  
-remain:
+  remain:
     build: .
     container_name: remain
     restart: unless-stopped
@@ -8,8 +7,6 @@ remain:
     ports:
       - "3000:3000"
 
-    volumes:
-      - ./data:/app/data
-
     environment:
       PORT: 3000
+      DATA_DIR: /tmp/remain-data
