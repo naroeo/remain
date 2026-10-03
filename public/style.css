@@ -650,6 +650,72 @@ button:disabled {
 
 /*
  * ============================
+ * 数据库同步
+ * ============================
+ */
+
+.database-sync-container {
+  display: grid;
+
+  grid-template-columns:
+    repeat(4, minmax(0, 1fr));
+
+  gap: 12px;
+
+  padding: 18px;
+}
+
+
+.database-sync-item {
+  min-width: 0;
+
+  padding: 14px;
+
+  background: #181c25;
+
+  border-radius: 8px;
+}
+
+
+.database-sync-label {
+  display: block;
+
+  margin-bottom: 6px;
+
+  color: #737b8a;
+
+  font-size: 14px;
+}
+
+
+.database-sync-value {
+  display: block;
+
+  color: #d7dbe4;
+
+  font-size: 15px;
+
+  word-break: break-word;
+}
+
+
+.database-sync-result-success {
+  color: #62d68b;
+}
+
+
+.database-sync-result-error {
+  color: #ff7777;
+}
+
+
+.database-sync-result-empty {
+  color: #858c9b;
+}
+
+
+/*
+ * ============================
  * 任务操作
  * ============================
  */
@@ -952,6 +1018,12 @@ button:disabled {
       repeat(2, minmax(0, 1fr));
   }
 
+
+  .database-sync-container {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+
 }
 
 
@@ -997,6 +1069,11 @@ button:disabled {
 
 
   .task-meta {
+    grid-template-columns: 1fr;
+  }
+
+
+  .database-sync-container {
     grid-template-columns: 1fr;
   }
 
