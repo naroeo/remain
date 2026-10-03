@@ -1087,7 +1087,7 @@ function formatTaskTime(
     date.toLocaleTimeString();
 
 
-  return `${datePart}   ${timePart}`;
+  return `${datePart}      ${timePart}`;
 
 }
 
