@@ -13,7 +13,7 @@ const rcloneConfigPath = path.join(dataDir, "rclone.conf");
 const remoteFolder = (process.env.REMOTE_FOLDER || "").replace(/\/+$/, "");
 const rcloneConf = process.env.RCLONE_CONF || "";
 
-const BACKUP_INTERVAL = 6 * 60 * 60 * 1000;
+const BACKUP_INTERVAL = 3 * 60 * 60 * 1000;
 
 let db = null;
 let backupRunning = false;
@@ -377,7 +377,7 @@ async function backupDatabase() {
 
 
 /* =========================================================
-   每 6 小时自动备份
+   每 3 小时自动备份
    ========================================================= */
 
 function startDatabaseBackupScheduler() {
@@ -390,7 +390,7 @@ function startDatabaseBackupScheduler() {
     });
   }, BACKUP_INTERVAL);
 
-  console.log("[Database] 数据库自动备份已启动：每 6 小时一次");
+  console.log("[Database] 数据库自动备份已启动：每 3 小时一次");
 }
 
 
