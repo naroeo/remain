@@ -20,6 +20,17 @@ let backupRunning = false;
 
 
 /* =========================================================
+   数据库同步状态
+   ========================================================= */
+
+let lastSyncAt = null;
+let lastSyncResult = null;
+
+let nextSyncAt =
+  Date.now() + BACKUP_INTERVAL;
+
+
+/* =========================================================
    基础目录
    ========================================================= */
 
@@ -276,7 +287,7 @@ function initializeDatabase() {
 
 
 /* =========================================================
-   数据库备份
+   数据库备份 / 同步
    ========================================================= */
 
 async function backupDatabase() {
@@ -287,16 +298,28 @@ async function backupDatabase() {
 
   if (!db) {
     console.log("[Database] 数据库尚未初始化，跳过备份");
+
+    lastSyncAt = new Date().toISOString();
+    lastSyncResult = "error: 数据库尚未初始化";
+
     return;
   }
 
   if (!remoteFolder) {
     console.log("[Database] 未配置 REMOTE_FOLDER，跳过备份");
+
+    lastSyncAt = new Date().toISOString();
+    lastSyncResult = "error: 未配置 REMOTE_FOLDER";
+
     return;
   }
 
   if (!rcloneConf.trim()) {
     console.log("[Database] 未配置 RCLONE_CONF，跳过备份");
+
+    lastSyncAt = new Date().toISOString();
+    lastSyncResult = "error: 未配置 RCLONE_CONF";
+
     return;
   }
 
@@ -350,11 +373,39 @@ async function backupDatabase() {
 
     console.log("[Database] 数据库已上传到云端");
 
+    /*
+     * 记录本次同步成功。
+     */
+    lastSyncAt = new Date().toISOString();
+    lastSyncResult = "success";
+
   } catch (error) {
     console.error(
       "[Database] 数据库备份失败：",
       error.message
     );
+
+    let reason =
+      error.message ||
+      "未知错误";
+
+    if (error.stderr) {
+      const stderr =
+        error.stderr
+          .toString()
+          .trim();
+
+      if (stderr) {
+        reason = stderr;
+      }
+    }
+
+    /*
+     * 记录本次同步失败。
+     */
+    lastSyncAt = new Date().toISOString();
+    lastSyncResult =
+      `error: ${reason}`;
 
     if (error.stderr) {
       console.error(
@@ -377,17 +428,56 @@ async function backupDatabase() {
 
 
 /* =========================================================
+   获取数据库同步状态
+   ========================================================= */
+
+function getDatabaseSyncStatus() {
+  return {
+    interval_minutes: 180,
+
+    last_sync:
+      lastSyncAt,
+
+    next_sync:
+      new Date(
+        nextSyncAt
+      ).toISOString(),
+
+    result:
+      lastSyncResult
+  };
+}
+
+
+/* =========================================================
    每 3 小时自动备份
    ========================================================= */
 
 function startDatabaseBackupScheduler() {
   setInterval(() => {
+
+    /*
+     * 本次定时同步开始后，
+     * 下一次同步时间继续顺延 3 小时。
+     */
+    nextSyncAt =
+      Date.now() + BACKUP_INTERVAL;
+
     backupDatabase().catch(error => {
+
       console.error(
         "[Database] 自动备份异常：",
         error.message
       );
+
+      lastSyncAt =
+        new Date().toISOString();
+
+      lastSyncResult =
+        `error: ${error.message || "未知错误"}`;
+
     });
+
   }, BACKUP_INTERVAL);
 
   console.log("[Database] 数据库自动备份已启动：每 3 小时一次");
@@ -586,5 +676,6 @@ module.exports = {
   updateTask,
   deleteTask,
   recordVisit,
-  backupDatabase
+  backupDatabase,
+  getDatabaseSyncStatus
 };
