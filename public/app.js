@@ -328,11 +328,15 @@ function showAppPage() {
 }
 
 
+
 /*
  * ============================
  * 登录
  * ============================
  */
+
+loginForm.noValidate = true;
+
 
 loginForm.addEventListener(
   "submit",
@@ -347,6 +351,20 @@ loginForm.addEventListener(
 
     const password =
       loginPassword.value;
+
+
+    /*
+     * 空密码
+     */
+
+    if (!password) {
+
+      loginError.textContent =
+        "Please enter your password.";
+
+      return;
+
+    }
 
 
     try {
@@ -378,9 +396,12 @@ loginForm.addEventListener(
         !response.ok
       ) {
 
+        /*
+         * 密码错误统一显示英文
+         */
+
         throw new Error(
-          data.error ||
-          "登录失败"
+          "Incorrect password."
         );
 
       }
@@ -419,12 +440,14 @@ loginForm.addEventListener(
 
       loginError.textContent =
         error.message ||
-        "登录失败";
+        "Login failed.";
 
     }
 
   }
 );
+
+
 
 
 /*
