@@ -34,13 +34,15 @@ let databaseSyncTimer =
  * last_sync
  * next_sync
  * result
+ * running
  */
 
 let databaseSyncState = {
   interval_minutes: null,
   last_sync: null,
   next_sync: null,
-  result: null
+  result: null,
+  running: null
 };
 
 
@@ -119,6 +121,11 @@ const clearLogsButton =
 /*
  * 数据库同步
  */
+
+const databaseSyncStatus =
+  document.getElementById(
+    "database-sync-status"
+  );
 
 const databaseSyncInterval =
   document.getElementById(
@@ -462,7 +469,8 @@ function logout() {
     interval_minutes: null,
     last_sync: null,
     next_sync: null,
-    result: null
+    result: null,
+    running: null
   };
 
 
@@ -582,6 +590,11 @@ function formatTime(
  *
  * 第一次还没有同步：
  * 显示「暂无」
+ *
+ * 日期和时间之间固定 6 个空格
+ *
+ * 例如：
+ * 2026/10/3      11:56:49
  * ============================
  */
 
@@ -619,7 +632,7 @@ function formatDatabaseSyncTime(
     date.toLocaleTimeString();
 
 
-  return `${datePart}   ${timePart}`;
+  return `${datePart}      ${timePart}`;
 
 }
 
@@ -681,18 +694,104 @@ function getDatabaseSyncResult(
 
 /*
  * ============================
+ * 数据库同步运行状态
+ * ============================
+ */
+
+function getDatabaseSyncStatus() {
+
+  /*
+   * 如果后端明确返回 running，
+   * 直接使用后端状态。
+   */
+
+  if (
+    databaseSyncState.running !==
+      null &&
+    databaseSyncState.running !==
+      undefined
+  ) {
+
+    return Boolean(
+      databaseSyncState.running
+    );
+
+  }
+
+
+  /*
+   * 当前后端如果没有 running 字段，
+   * 只要同步间隔已经正常返回，
+   * 就认为数据库同步服务正在运行。
+   */
+
+  return (
+    databaseSyncState.interval_minutes !==
+      null &&
+    databaseSyncState.interval_minutes !==
+      undefined
+  );
+
+}
+
+
+/*
+ * ============================
  * 渲染数据库同步状态
  * ============================
  */
 
 function renderDatabaseSync() {
 
-  if (!databaseSyncInterval ||
-      !databaseSyncLast ||
-      !databaseSyncNext ||
-      !databaseSyncResult) {
+  if (
+    !databaseSyncStatus ||
+    !databaseSyncInterval ||
+    !databaseSyncLast ||
+    !databaseSyncNext ||
+    !databaseSyncResult
+  ) {
 
     return;
+
+  }
+
+
+  /*
+   * 运行状态
+   *
+   * 与任务列表完全相同：
+   *
+   * status-on  -> 绿色「运行中」
+   * status-off -> 灰色「已停止」
+   */
+
+  const isRunning =
+    getDatabaseSyncStatus();
+
+
+  databaseSyncStatus.classList.remove(
+    "status-on",
+    "status-off"
+  );
+
+
+  if (isRunning) {
+
+    databaseSyncStatus.classList.add(
+      "status-on"
+    );
+
+    databaseSyncStatus.textContent =
+      "运行中";
+
+  } else {
+
+    databaseSyncStatus.classList.add(
+      "status-off"
+    );
+
+    databaseSyncStatus.textContent =
+      "已停止";
 
   }
 
@@ -856,6 +955,10 @@ async function loadDatabaseSync() {
 
       result:
         data.result ??
+        null,
+
+      running:
+        data.running ??
         null
     };
 
