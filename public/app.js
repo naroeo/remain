@@ -15,6 +15,37 @@ let refreshTimer =
 
 /*
  * ============================
+ * 数据库同步
+ * ============================
+ */
+
+let databaseSyncTimer =
+  null;
+
+
+/*
+ * 当前数据库同步状态
+ *
+ * 接口：
+ * GET /api/database-sync
+ *
+ * 字段：
+ * interval_minutes
+ * last_sync
+ * next_sync
+ * result
+ */
+
+let databaseSyncState = {
+  interval_minutes: null,
+  last_sync: null,
+  next_sync: null,
+  result: null
+};
+
+
+/*
+ * ============================
  * DOM
  * ============================
  */
@@ -344,9 +375,13 @@ loginForm.addEventListener(
 
       await loadLogs();
 
+      await loadDatabaseSync();
+
       startLogStream();
 
       startAutoRefresh();
+
+      startDatabaseSyncAutoRefresh();
 
     } catch (error) {
 
@@ -389,7 +424,21 @@ function logout() {
 
   stopAutoRefresh();
 
+  stopDatabaseSyncAutoRefresh();
+
   closeEditModal();
+
+
+  /*
+   * 清除当前数据库同步状态
+   */
+
+  databaseSyncState = {
+    interval_minutes: null,
+    last_sync: null,
+    next_sync: null,
+    result: null
+  };
 
 
   showLoginPage();
@@ -495,6 +544,249 @@ function formatTime(
 
 
   return date.toLocaleString();
+
+}
+
+
+/*
+ * ============================
+ * 格式化数据库同步时间
+ *
+ * 第一次还没有同步：
+ * 显示「暂无」
+ * ============================
+ */
+
+function formatDatabaseSyncTime(
+  value
+) {
+
+  if (!value) {
+
+    return "暂无";
+
+  }
+
+
+  const date =
+    new Date(value);
+
+
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+
+    return "暂无";
+
+  }
+
+
+  const datePart =
+    date.toLocaleDateString();
+
+
+  const timePart =
+    date.toLocaleTimeString();
+
+
+  return `${datePart}   ${timePart}`;
+
+}
+
+
+/*
+ * ============================
+ * 数据库同步结果
+ *
+ * 这里只负责判断状态，
+ * 不决定颜色。
+ *
+ * success
+ * error: 具体原因
+ * 第一次没有同步：
+ * 暂无
+ * ============================
+ */
+
+function getDatabaseSyncResult(
+  result
+) {
+
+  if (!result) {
+
+    return "暂无";
+
+  }
+
+
+  const status =
+    String(
+      result
+    );
+
+
+  if (
+    status === "success"
+  ) {
+
+    return "success";
+
+  }
+
+
+  if (
+    status.startsWith(
+      "error:"
+    )
+  ) {
+
+    return status;
+
+  }
+
+
+  return status;
+
+}
+
+
+/*
+ * ============================
+ * 获取数据库同步状态
+ * ============================
+ */
+
+async function loadDatabaseSync() {
+
+  try {
+
+    const response =
+      await apiFetch(
+        "/api/database-sync"
+      );
+
+
+    const data =
+      await response.json();
+
+
+    if (
+      !response.ok
+    ) {
+
+      throw new Error(
+        data.error ||
+        "获取数据库同步状态失败"
+      );
+
+    }
+
+
+    /*
+     * 保存同步状态
+     *
+     * 后续数据库同步面板
+     * 直接使用这个状态。
+     */
+
+    databaseSyncState = {
+      interval_minutes:
+        data.interval_minutes ??
+        null,
+
+      last_sync:
+        data.last_sync ??
+        null,
+
+      next_sync:
+        data.next_sync ??
+        null,
+
+      result:
+        data.result ??
+        null
+    };
+
+
+    /*
+     * 这里暂时不直接操作颜色。
+     *
+     * 下一步 style.css 负责颜色，
+     * 面板负责显示这些数据。
+     */
+
+  } catch (error) {
+
+    if (
+      error.message
+        .includes("登录已失效")
+    ) {
+
+      return;
+
+    }
+
+
+    console.error(
+      "[App] 获取数据库同步状态失败：",
+      error
+    );
+
+  }
+
+}
+
+
+/*
+ * ============================
+ * 数据库同步状态自动刷新
+ *
+ * 与任务列表一样，
+ * 每 5 秒检查一次。
+ * ============================
+ */
+
+function startDatabaseSyncAutoRefresh() {
+
+  stopDatabaseSyncAutoRefresh();
+
+
+  databaseSyncTimer =
+    setInterval(
+      () => {
+
+        if (!token) {
+
+          return;
+
+        }
+
+
+        loadDatabaseSync();
+
+      },
+      5000
+    );
+
+}
+
+
+function stopDatabaseSyncAutoRefresh() {
+
+  if (
+    databaseSyncTimer
+  ) {
+
+    clearInterval(
+      databaseSyncTimer
+    );
+
+    databaseSyncTimer =
+      null;
+
+  }
 
 }
 
@@ -1936,6 +2228,7 @@ async function startLogStream() {
 
   }
 
+
 }
 
 
@@ -2381,10 +2674,14 @@ async function initialize() {
 
     await loadLogs();
 
+    await loadDatabaseSync();
+
 
     startLogStream();
 
     startAutoRefresh();
+
+    startDatabaseSyncAutoRefresh();
 
   } catch (error) {
 
