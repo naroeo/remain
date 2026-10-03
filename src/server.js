@@ -6,7 +6,8 @@ const {
   getTask,
   createTask,
   updateTask,
-  deleteTask
+  deleteTask,
+  getDatabaseSyncStatus
 } = require("./database");
 
 const {
@@ -351,6 +352,44 @@ app.get(
 
 /*
  * ============================
+ * 获取数据库同步状态
+ * ============================
+ */
+
+app.get(
+  "/api/database-sync",
+  (req, res) => {
+
+    try {
+
+      const status =
+        getDatabaseSyncStatus();
+
+      res.json(
+        status
+      );
+
+    } catch (error) {
+
+      console.error(
+        "[API] 获取数据库同步状态失败：",
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error: "获取数据库同步状态失败"
+        });
+
+    }
+
+  }
+);
+
+
+/*
+ * ============================
  * 创建任务
  * ============================
  */
@@ -481,13 +520,13 @@ app.post(
 
 
       const task =
-  createTask({
-    name,
-    url,
-    interval_minutes: intervalMinutes,
-    stay_seconds: staySeconds,
-    enabled: 1
-  });
+        createTask({
+          name,
+          url,
+          interval_minutes: intervalMinutes,
+          stay_seconds: staySeconds,
+          enabled: 1
+        });
 
 
       console.log(
