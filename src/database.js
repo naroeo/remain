@@ -205,6 +205,7 @@ function initializeDatabase() {
       enabled INTEGER NOT NULL DEFAULT 1,
       visit_count INTEGER NOT NULL DEFAULT 0,
       last_visit TEXT,
+      last_status TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
   `);
@@ -251,6 +252,13 @@ function initializeDatabase() {
     db.exec(`
       ALTER TABLE tasks
       ADD COLUMN last_visit TEXT
+    `);
+  }
+
+  if (!columns.includes("last_status")) {
+    db.exec(`
+      ALTER TABLE tasks
+      ADD COLUMN last_status TEXT
     `);
   }
 
@@ -411,6 +419,7 @@ function getTasks() {
         enabled,
         visit_count,
         last_visit,
+        last_status,
         created_at
       FROM tasks
       ORDER BY id ASC
@@ -431,6 +440,7 @@ function getTask(id) {
         enabled,
         visit_count,
         last_visit,
+        last_status,
         created_at
       FROM tasks
       WHERE id = ?
@@ -546,17 +556,19 @@ function deleteTask(id) {
 }
 
 
-function recordVisit(id) {
+function recordVisit(id, status = "success") {
   db
     .prepare(`
       UPDATE tasks
       SET
         visit_count = visit_count + 1,
-        last_visit = ?
+        last_visit = ?,
+        last_status = ?
       WHERE id = ?
     `)
     .run(
       new Date().toISOString(),
+      status || "success",
       id
     );
 }
