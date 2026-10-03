@@ -501,6 +501,193 @@ function formatTime(
 
 /*
  * ============================
+ * 格式化任务卡片时间
+ *
+ * 日期和时间之间增加空格，
+ * 例如：
+ * 2026/10/3   10:07:12
+ * ============================
+ */
+
+function formatTaskTime(
+  value
+) {
+
+  if (!value) {
+
+    return "暂无";
+
+  }
+
+
+  const date =
+    new Date(value);
+
+
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+
+    return "暂无";
+
+  }
+
+
+  const datePart =
+    date.toLocaleDateString();
+
+
+  const timePart =
+    date.toLocaleTimeString();
+
+
+  return `${datePart}   ${timePart}`;
+
+}
+
+
+/*
+ * ============================
+ * 计算任务下一次访问时间
+ *
+ * 使用：
+ * 上次访问时间 + 执行间隔
+ *
+ * 不增加数据库字段。
+ * ============================
+ */
+
+function getNextVisitTime(
+  task
+) {
+
+  if (
+    Number(task.enabled) !== 1
+  ) {
+
+    return null;
+
+  }
+
+
+  if (!task.last_visit) {
+
+    return null;
+
+  }
+
+
+  const lastVisit =
+    new Date(
+      task.last_visit
+    );
+
+
+  if (
+    Number.isNaN(
+      lastVisit.getTime()
+    )
+  ) {
+
+    return null;
+
+  }
+
+
+  const intervalMinutes =
+    Number(
+      task.interval_minutes
+    );
+
+
+  if (
+    !Number.isFinite(
+      intervalMinutes
+    ) ||
+    intervalMinutes < 0
+  ) {
+
+    return null;
+
+  }
+
+
+  return new Date(
+    lastVisit.getTime() +
+    intervalMinutes * 60 * 1000
+  );
+
+}
+
+
+/*
+ * ============================
+ * 最后执行结果
+ * ============================
+ */
+
+function getTaskResult(
+  task
+) {
+
+  if (!task.last_status) {
+
+    return `
+      <span class="task-result-empty">
+        暂无
+      </span>
+    `;
+
+  }
+
+
+  const status =
+    String(
+      task.last_status
+    );
+
+
+  if (
+    status === "success"
+  ) {
+
+    return `
+      <span class="task-result-success">
+        success
+      </span>
+    `;
+
+  }
+
+
+  if (
+    status.startsWith(
+      "error:"
+    )
+  ) {
+
+    return `
+      <span class="task-result-error">
+        ${escapeHtml(status)}
+      </span>
+    `;
+
+  }
+
+
+  return `
+    <span class="task-result-error">
+      ${escapeHtml(status)}
+    </span>
+  `;
+
+}
+
+
+/*
+ * ============================
  * 格式化任务状态
  * ============================
  */
@@ -600,8 +787,15 @@ function renderTasks(
   tasksContainer.innerHTML =
     tasks
       .map(
-        task =>
-          `
+        task => {
+
+          const nextVisit =
+            getNextVisitTime(
+              task
+            );
+
+
+          return `
           <div
             class="task-card"
             data-task-id="${task.id}"
@@ -700,7 +894,7 @@ function renderTasks(
                 </span>
 
                 <span class="task-value">
-                  ${formatTime(
+                  ${formatTaskTime(
                     task.last_visit
                   )}
                 </span>
@@ -715,9 +909,13 @@ function renderTasks(
                 </span>
 
                 <span class="task-value">
-                  ${formatTime(
-                    task.next_visit
-                  )}
+                  ${
+                    nextVisit
+                      ? formatTaskTime(
+                          nextVisit
+                        )
+                      : "暂无"
+                  }
                 </span>
 
               </div>
@@ -730,9 +928,8 @@ function renderTasks(
                 </span>
 
                 <span class="task-value">
-                  ${escapeHtml(
-                    task.last_status ||
-                    "暂无"
+                  ${getTaskResult(
+                    task
                   )}
                 </span>
 
@@ -786,7 +983,9 @@ function renderTasks(
             </div>
 
           </div>
-          `
+          `;
+
+        }
       )
       .join("");
 
