@@ -505,10 +505,13 @@ button:disabled {
 
 /*
  * 保留当前绿色「运行中」
+ * 标准大小：18px
  */
 
 .status-on {
   color: #62d68b;
+
+  font-size: 18px;
 }
 
 
@@ -546,6 +549,20 @@ button:disabled {
   color: #aeb5c2;
 
   word-break: break-all;
+}
+
+
+/*
+ * 任务网址统一 17px
+ */
+
+.task-url .task-label {
+  font-size: 17px;
+}
+
+
+.task-url .task-url-value {
+  font-size: 17px;
 }
 
 
@@ -595,6 +612,39 @@ button:disabled {
   font-size: 13px;
 
   word-break: break-word;
+}
+
+
+/*
+ * 任务详细信息统一 16px
+ */
+
+.task-meta .task-label {
+  font-size: 16px;
+}
+
+
+.task-meta .task-value {
+  font-size: 16px;
+}
+
+
+/*
+ * 最后结果
+ */
+
+.task-result-success {
+  color: #62d68b;
+}
+
+
+.task-result-error {
+  color: #ff7777;
+}
+
+
+.task-result-empty {
+  color: #d7dbe4;
 }
 
 
