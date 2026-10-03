@@ -117,6 +117,31 @@ const clearLogsButton =
 
 
 /*
+ * 数据库同步
+ */
+
+const databaseSyncInterval =
+  document.getElementById(
+    "database-sync-interval"
+  );
+
+const databaseSyncLast =
+  document.getElementById(
+    "database-sync-last"
+  );
+
+const databaseSyncNext =
+  document.getElementById(
+    "database-sync-next"
+  );
+
+const databaseSyncResult =
+  document.getElementById(
+    "database-sync-result"
+  );
+
+
+/*
  * 编辑任务
  */
 
@@ -441,6 +466,9 @@ function logout() {
   };
 
 
+  renderDatabaseSync();
+
+
   showLoginPage();
 
 
@@ -600,8 +628,7 @@ function formatDatabaseSyncTime(
  * ============================
  * 数据库同步结果
  *
- * 这里只负责判断状态，
- * 不决定颜色。
+ * 这里只负责判断状态。
  *
  * success
  * error: 具体原因
@@ -654,6 +681,132 @@ function getDatabaseSyncResult(
 
 /*
  * ============================
+ * 渲染数据库同步状态
+ * ============================
+ */
+
+function renderDatabaseSync() {
+
+  if (!databaseSyncInterval ||
+      !databaseSyncLast ||
+      !databaseSyncNext ||
+      !databaseSyncResult) {
+
+    return;
+
+  }
+
+
+  /*
+   * 同步间隔
+   */
+
+  if (
+    databaseSyncState.interval_minutes !==
+      null &&
+    databaseSyncState.interval_minutes !==
+      undefined
+  ) {
+
+    databaseSyncInterval.textContent =
+      `${databaseSyncState.interval_minutes} 分钟`;
+
+  } else {
+
+    databaseSyncInterval.textContent =
+      "暂无";
+
+  }
+
+
+  /*
+   * 上次同步
+   */
+
+  databaseSyncLast.textContent =
+    formatDatabaseSyncTime(
+      databaseSyncState.last_sync
+    );
+
+
+  /*
+   * 下次同步
+   */
+
+  databaseSyncNext.textContent =
+    formatDatabaseSyncTime(
+      databaseSyncState.next_sync
+    );
+
+
+  /*
+   * 同步结果
+   */
+
+  const result =
+    getDatabaseSyncResult(
+      databaseSyncState.result
+    );
+
+
+  databaseSyncResult.textContent =
+    result;
+
+
+  /*
+   * 根据结果设置 CSS class
+   *
+   * success -> 绿色
+   * error   -> 红色
+   * 暂无    -> 灰色
+   */
+
+  databaseSyncResult.classList.remove(
+    "database-sync-result-success",
+    "database-sync-result-error",
+    "database-sync-result-empty"
+  );
+
+
+  if (
+    result === "success"
+  ) {
+
+    databaseSyncResult.classList.add(
+      "database-sync-result-success"
+    );
+
+  } else if (
+    result.startsWith(
+      "error:"
+    )
+  ) {
+
+    databaseSyncResult.classList.add(
+      "database-sync-result-error"
+    );
+
+  } else if (
+    result === "暂无"
+  ) {
+
+    databaseSyncResult.classList.add(
+      "database-sync-result-empty"
+    );
+
+  } else {
+
+    databaseSyncResult.classList.add(
+      "database-sync-result-error"
+    );
+
+  }
+
+}
+
+
+/*
+ * ============================
  * 获取数据库同步状态
  * ============================
  */
@@ -686,9 +839,6 @@ async function loadDatabaseSync() {
 
     /*
      * 保存同步状态
-     *
-     * 后续数据库同步面板
-     * 直接使用这个状态。
      */
 
     databaseSyncState = {
@@ -711,11 +861,10 @@ async function loadDatabaseSync() {
 
 
     /*
-     * 这里暂时不直接操作颜色。
-     *
-     * 下一步 style.css 负责颜色，
-     * 面板负责显示这些数据。
+     * 获取数据后立即更新面板
      */
+
+    renderDatabaseSync();
 
   } catch (error) {
 
